@@ -74,25 +74,29 @@ That unique constraint is load-bearing: polling plus a scheduled send would othe
 
 ## Endpoint reference
 
-Field names below come from a maintained typed community client (`jeppe-smith/fpl-api`). ⚠️ marks shapes not yet confirmed against a live call — Phase 0 of the roadmap does that.
+Verified against live calls on 2026-08-03, **pre-season** for 2026/27 (GW1 deadline 2026-08-21). ✅ = confirmed live. ⚠️ = container confirmed but the collection was empty pre-season, so element fields still trace only to a typed community client (`jeppe-smith/fpl-api`) and need re-checking once GW1 completes.
 
 | Endpoint | Fields used |
 |---|---|
-| `bootstrap-static/` | `events[]`: `id`, `finished`, `data_checked`, `deadline_time`, `average_entry_score` (**global**, not league) |
-| `event-status/` ⚠️ | `status[]`: `bonus_added`; `leagues` (string; exact values need confirmation) |
-| `leagues-classic/{id}/standings/` | `league.start_event`; `standings.results[]`: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total`; `standings.has_next`, `standings.page`; `new_entries[]` |
-| `entry/{id}/history` | `current[]`: `event`, `points`, `rank`, `total_points`, `points_on_bench`, `event_transfers_cost`, `overall_rank` |
+| `bootstrap-static/` ✅ | `events[]` (38): `id`, `name`, `finished`, `data_checked`, `deadline_time`, `average_entry_score` (**global**, not league). Also present: `release_time`, `ranked_count`, `is_current`, `is_next`, `is_previous`, `highest_scoring_entry` |
+| `event-status/` ⚠️ | `{ status: [], leagues: "" }` pre-season. Envelope confirmed; `status[].bonus_added` and the `leagues === "Updated"` string are **not yet observed** |
+| `leagues-classic/{id}/standings/` ⚠️ | Top level: `league`, `standings`, `new_entries`, `last_updated_data`. `league.start_event` ✅. `standings`: `has_next`, `page`, `results[]` ✅ envelope. `results[]` elements unobserved: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total` |
+| `entry/{id}/history` ⚠️ | Top level `current`, `past`, `chips` ✅. `past[]` ✅: `season_name`, `total_points`, `rank`, `rank_percentage`. `current[]` unobserved: `event`, `points`, `rank`, `total_points`, `points_on_bench`, `event_transfers_cost`, `overall_rank` |
 
-Two traps in that table:
+**`new_entries` is an object, not an array.** It carries the same pagination envelope as standings — `{ has_next, page, results }` — so it must be read as `new_entries.results` and paginated in its own right. (Corrected from the initial research, which had it as a bare `new_entries[]`.)
+
+Two further traps in that table:
 - **`average_entry_score` is the global FPL average.** The league average must be computed as the mean of `event_total` across results. Substituting it is an invisible bug.
-- **`standings.results` is paginated** (`has_next`, `?page_standings=N`) and **`new_entries[]` holds managers absent from standings** until the next GW processes. Both must be handled for the digest to list everyone.
+- **`standings.results` is paginated** (`has_next`, `?page_standings=N`) and **`new_entries.results` holds managers absent from standings** until the next GW processes. Both must be handled for the digest to list everyone.
+- **`event-status` returns `status: []` outside a live gameweek.** `[].every(...)` is vacuously `true`, so the readiness check must require `status.length > 0` before evaluating `bonus_added` at all.
 
 ## Gameweek-ready state machine
 
 ```
  polling ──> events[gw].finished ─────────> not yet safe (bonus pending)
               │
-              └─> event-status: every status[].bonus_added === true
+              └─> event-status: status.length > 0        <- guard: [] is
+                  AND every status[].bonus_added === true    vacuously true
                   AND leagues === "Updated"
                   AND events[gw].data_checked
                       │
@@ -117,7 +121,7 @@ Rules, all of them failure modes rather than style:
 
 ## Egress and Cloudflare
 
-The FPL API sits behind Cloudflare and rejects many datacenter IPs. This is a live risk, not a detail, and it drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
+The FPL API sits behind Cloudflare and rejects many datacenter IPs. Residential IPs are fine — all four endpoints were fetched successfully from one on 2026-08-03 — so this is specifically a *hosting* risk, and it remains unverified from Railway itself. Confirm it from a deployed container before relying on the scheduler. It drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
 
 ## Testing strategy
 

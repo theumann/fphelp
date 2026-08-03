@@ -36,7 +36,8 @@ Because the WhatsApp payload lives in a URL, length is a design constraint rathe
 Each feature is annotated with its data source. "Free" means it needs no call beyond the standings fetch.
 
 ### Phase 0 — verify the API
-- One live call each to `bootstrap-static/`, `event-status/`, and `leagues-classic/{id}/standings/`, diffing real payloads against the documented shapes in [ARCHITECTURE.md](./ARCHITECTURE.md)
+- ✅ **Done 2026-08-03** for `bootstrap-static/` (fully confirmed) and the response envelopes of `event-status/`, `leagues-classic/{id}/standings/`, `entry/{id}/history`
+- ⏳ **Blocked until GW1 completes (deadline 2026-08-21)** — `standings.results[]` and `history.current[]` element fields, and the live value of `event-status.leagues`, are all empty pre-season. Re-run the diff after GW1 is scored and record fixtures then
 - One throwaway `whatsapp://send?text=` link with a realistic full-length digest, tapped on the owner's real phone, to confirm group selection works and nothing is truncated
 - One league hardcoded; no setup UI yet
 
@@ -72,7 +73,9 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 
 `events[].finished` flips **before** bonus points are applied, and league tables are recalculated on a schedule separate from player points. Triggering on `finished` + `data_checked` alone can send a digest with stale standings.
 
-Gate instead on the `event-status` endpoint — every `status[].bonus_added === true` **and** `leagues === "Updated"` — cross-checked against `events[gw].data_checked`.
+Gate instead on the `event-status` endpoint — `status.length > 0` **and** every `status[].bonus_added === true` **and** `leagues === "Updated"` — cross-checked against `events[gw].data_checked`.
+
+The length guard is not defensive padding: `event-status` returns `{"status":[],"leagues":""}` outside a live gameweek (confirmed live, pre-season), and `[].every(...)` is vacuously `true`.
 
 Preparation must also be idempotent: a `deliveries` row unique on `(league_id, gameweek, kind)` is required before any cron runs, or polling plus a scheduled send can double-prepare.
 

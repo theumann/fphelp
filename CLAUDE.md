@@ -24,8 +24,9 @@ These are the traps that produce silently wrong output rather than errors:
 
 - **League average must be computed** as the mean of `event_total` across standings results. `events[].average_entry_score` is the *global* FPL average — using it looks fine and is wrong.
 - **`standings.results` is paginated.** Follow `has_next` / `?page_standings=N` or managers past 50 vanish from the digest.
-- **`new_entries[]` managers are invisible** in standings until the next GW processes. The roster is `standings ∪ new_entries`.
+- **`new_entries` is an object, not an array** — `{has_next, page, results}`, same envelope as standings. Its managers are invisible in standings until the next GW processes, so the roster is `standings.results ∪ new_entries.results`, each paginated.
 - **`finished` ≠ safe to send.** It flips before bonus points apply. Gate on `event-status` (all `bonus_added`, `leagues === "Updated"`) cross-checked with `data_checked`.
+- **`event-status` returns `status: []` outside a live gameweek**, and `[].every(...)` is `true`. Require `status.length > 0` first or the gate opens on nothing.
 - **Never put a phone number in the WhatsApp link.** `wa.me/<number>?text=` opens an individual chat and makes groups unreachable — it still looks like a working link. Always `whatsapp://send?text=` / `https://wa.me/?text=` with no number.
 - **Digest length budget: ~1,500 chars URL-encoded.** Newlines cost `%0A`; table padding is pure cost.
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
