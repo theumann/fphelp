@@ -13,43 +13,118 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
 | Concern | Choice | Notes |
 |---|---|---|
 | App type | Webapp (responsive) | Not native — owner-only, low-frequency admin usage |
-| Framework | Next.js (React) | One codebase for config UI + API routes |
-| Database | Postgres on Railway | Reuses existing Railway setup |
-| Auth | Auth.js (NextAuth), magic link | Users/sessions in the same Railway Postgres |
-| Hosting | Railway (all services) | App, DB, and worker in one vendor |
-| Scheduling | Railway cron/worker service | Polls FPL for gameweek completion |
-| Email delivery | Resend or Postmark | HTML digest |
-| WhatsApp delivery | Copy-paste text block (v1) | Real API automation deferred |
+| Language | TypeScript, Node 22 | Best-typed FPL community clients; shared types across render and deep-link paths |
+| Framework | Next.js (App Router) | Owner dashboard, mobile send page, and job routes in one deploy |
+| Database | Postgres on Railway + Drizzle | Co-located with the app over private networking; one dashboard and bill |
+| Auth | Magic link (Auth.js) | Single owner; the emailed link must open the mobile send page directly |
+| Hosting | Railway (persistent container) | Stable egress IP — see "Egress and Cloudflare". Not Vercel serverless |
+| Scheduling | Railway cron → token-protected route | Survives restarts; no in-process timer state |
+| Email delivery | Resend + React Email | One template renders the HTML email **and** the plaintext WhatsApp payload |
+| WhatsApp delivery | Deep link (`whatsapp://send?text=`) | Owner taps; no phone number in the URL |
+| Unit tests | Vitest + recorded API fixtures | The API is unofficial and shifts between seasons |
+| UI tests | Playwright | Owner flows, especially deep-link construction |
 
 ## Components
 
 ```
-[Owner's browser]
+[Owner's browser / phone]
         |
         v
 [Next.js app on Railway]
-  - Auth.js magic-link login
+  - Magic-link login
   - League setup / pot config UI
-  - Digest preview + "send now"
-  - API routes
+  - Mobile send page (deep link + copy)
+  - API + job routes
         |
-        +--> [Railway Postgres] leagues, owners, pot_config,
-        |                        digest_history, gw_state
+        +--> [Railway Postgres] leagues, managers, manager_gw_history,
+        |                        digests, deliveries
         |
-        +--> [FPL API client] bootstrap-static, leagues-classic
-        |                     standings, entry/*  (cached)
+        +--> [FPL client] bootstrap-static, event-status, leagues-classic
+        |                 standings (paginated), entry/*/history  (cached,
+        |                 retry + backoff)
         |
         v
-[Railway cron/worker]  --every 30-60min-->  poll bootstrap-static
-        |                                    for event.finished
-        |                                    + data_checked
+[Railway cron]  --every 30-60min-->  poll event-status:
+        |                             bonus_added && leagues == "Updated"
+        |                             x-check events[gw].data_checked
         v
-[Digest builder] standings, rank deltas, GW winner,
-        |         risers/fallers, pot total + payouts
+[Digest computation]  pure functions: standings, rank deltas,
+        |             GW winner, risers/fallers, league average,
+        |             pot payouts
+        v
+[Renderer]  one source -> HTML email + length-budgeted plaintext
         |
-        +--> [Email: Resend/Postmark]  (automated)
-        +--> [WhatsApp text block]     (owner copy-pastes)
+        +--> [Email: Resend]        (automated)
+        +--> [Send page]            (owner taps deep link -> WhatsApp)
 ```
+
+Components are layered so the risky parts are isolated: the **FPL client** owns caching, retry and backoff; **digest computation** is pure functions over fetched JSON (hence heavily unit-tested); the **renderer** emits both output formats from one template; **delivery adapters** sit behind one interface so email and WhatsApp differ only at the edge.
+
+## Data model
+
+| Table | Purpose |
+|---|---|
+| `leagues` | league id, name, `start_event`, pot total, prize distribution rules |
+| `managers` | `entry`, `entry_name`, `player_name`, league membership |
+| `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
+| `digests` | computed digest per league per GW: stored payload, both rendered forms |
+| `deliveries` | `kind`, `prepared_at`, `sent_at`; **unique on `(league_id, gameweek, kind)`** |
+
+That unique constraint is load-bearing: polling plus a scheduled send would otherwise double-prepare. `sent_at` null means *unknown*, not failure — the owner's send happens inside WhatsApp and is unobservable.
+
+## Endpoint reference
+
+Field names below come from a maintained typed community client (`jeppe-smith/fpl-api`). ⚠️ marks shapes not yet confirmed against a live call — Phase 0 of the roadmap does that.
+
+| Endpoint | Fields used |
+|---|---|
+| `bootstrap-static/` | `events[]`: `id`, `finished`, `data_checked`, `deadline_time`, `average_entry_score` (**global**, not league) |
+| `event-status/` ⚠️ | `status[]`: `bonus_added`; `leagues` (string; exact values need confirmation) |
+| `leagues-classic/{id}/standings/` | `league.start_event`; `standings.results[]`: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total`; `standings.has_next`, `standings.page`; `new_entries[]` |
+| `entry/{id}/history` | `current[]`: `event`, `points`, `rank`, `total_points`, `points_on_bench`, `event_transfers_cost`, `overall_rank` |
+
+Two traps in that table:
+- **`average_entry_score` is the global FPL average.** The league average must be computed as the mean of `event_total` across results. Substituting it is an invisible bug.
+- **`standings.results` is paginated** (`has_next`, `?page_standings=N`) and **`new_entries[]` holds managers absent from standings** until the next GW processes. Both must be handled for the digest to list everyone.
+
+## Gameweek-ready state machine
+
+```
+ polling ──> events[gw].finished ─────────> not yet safe (bonus pending)
+              │
+              └─> event-status: every status[].bonus_added === true
+                  AND leagues === "Updated"
+                  AND events[gw].data_checked
+                      │
+                      v
+                  compute ──> digests row ──> deliveries: prepared
+                                                  │
+                                                  └─> owner taps ──> (optional) sent_at
+```
+
+## Deep-link construction
+
+```
+whatsapp://send?text=<urlencoded digest>      # primary, mobile
+https://wa.me/?text=<urlencoded digest>       # https fallback
+```
+
+Rules, all of them failure modes rather than style:
+- **Never include a phone number.** `wa.me/<number>?text=` opens that individual chat and makes groups unreachable, while still looking like a working link.
+- URL-encode the whole payload; newlines become `%0A`, so table padding costs real budget.
+- Target **~1,500 characters encoded**, with a defined truncation strategy for large leagues.
+- Always offer **copy-to-clipboard** as a fallback for desktop or a failed scheme handler.
+
+## Egress and Cloudflare
+
+The FPL API sits behind Cloudflare and rejects many datacenter IPs. This is a live risk, not a detail, and it drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
+
+## Testing strategy
+
+- **Vitest — digest computation.** Highest value, because the logic is pure functions over fetched JSON and the bugs are silent-wrong-number bugs, not crashes. Cover: league average from `event_total` (never `average_entry_score`), rank movement from `last_rank`, GW winner, riser/faller, pagination assembly across `has_next`, `standings ∪ new_entries` roster completeness, prize splits summing to the entered pot. Driven by **recorded fixtures** of real payloads, which double as a change detector against an unofficial API.
+- **Playwright — owner flows.** Setup wizard, dashboard, manual send, and above all the send page. Critical assertion: the WhatsApp href starts with `whatsapp://send?text=` (or `https://wa.me/?text=`), contains **no phone number**, and its decoded payload round-trips to the expected digest within the length budget. Also assert the clipboard fallback. Stub the FPL API via route interception; test the mobile viewport, since that's the only place the deep link is real.
+
+Not testable: whether the owner actually sent the message inside WhatsApp. That's the boundary the delivery-state design accounts for.
 
 ## Decisions & rationale
 
@@ -57,23 +132,30 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
 
 **Next.js.** Already in use on other projects. API routes plus UI in one deployable keeps the surface small.
 
-**Postgres on Railway, not Supabase/Neon.** Railway is already in use. At this scale a plain Postgres instance is a plain Postgres instance — Supabase's and Neon's differentiators (built-in auth/storage, branching) aren't needed, and adding a vendor costs more than it saves.
+**Postgres on Railway, not Supabase/Neon.** Railway is already in use. At this scale a plain Postgres instance is a plain Postgres instance — Supabase's and Neon's differentiators (built-in auth/storage, branching) aren't needed, and adding a vendor costs more than it saves. Neon's branching and scale-to-zero are structurally wasted here: the Cloudflare constraint already forces an always-on container, and per-preview DB branches are a team-workflow luxury for a solo one-league project. The one thing Neon would have given free is point-in-time restore, so **verify Railway backups are enabled** as an explicit setup step.
 
-**Auth.js with magic link, not Supabase Auth.** Keeps users and sessions in the Postgres we already own, with no external auth vendor. Magic link sidesteps password-reset flows entirely, which matters when the user count is a handful of league owners. Matches a pattern already used successfully elsewhere.
+**Magic-link auth.** Keeps users and sessions in the Postgres we already own, with no external auth vendor, and sidesteps password-reset flows. It also does double duty: the emailed link is the same one that opens the mobile send page, so the owner's whole weekly interaction is one tap from their inbox.
 
-**Everything on Railway.** A Vercel/Railway split is the more common Next.js default, but one dashboard and one billing relationship is worth more here than Vercel's DX edge, especially since the worker needs a long-running home anyway.
+**Everything on Railway, not Vercel.** A Vercel/Railway split is the more common Next.js default, but serverless is actively wrong here — rotating shared egress IPs collide with Cloudflare's datacenter blocking. Railway also gives one dashboard and one bill, and the cron needs a long-running home anyway. Not Fly.io either: its advantages (multi-region anycast, dedicated IPv4, scale-to-zero Machines) are irrelevant to a single-region cron app with one user, and it doesn't hedge the Cloudflare risk any better.
 
-**Polling for gameweek completion.** FPL has no webhooks. `bootstrap-static` exposes `event.finished` and `event.data_checked`; polling every 30-60 minutes is ample given gameweeks resolve weekly. Last-seen GW state is persisted per league so a restart or a double-poll can't double-send.
+**Polling for gameweek completion, gated on `event-status`.** FPL has no webhooks. The obvious trigger — `events[].finished` + `data_checked` — fires **too early**: `finished` flips before bonus points are applied, and league tables recalculate on a separate schedule, so a digest can go out with stale standings. Gate on `event-status` instead (all `bonus_added`, `leagues === "Updated"`), cross-checked against `data_checked`. Polling every 30-60 minutes is ample given gameweeks resolve weekly.
+
+**Idempotent preparation.** Cron polling and any scheduled/manual send can both reach the prepare step. The `deliveries` unique constraint on `(league_id, gameweek, kind)` makes double-preparation impossible at the database level rather than by careful control flow.
 
 **Caching `bootstrap-static`.** It's large and changes rarely within a week (fixtures, deadlines, prices). A short TTL keeps request volume low and means a transient FPL outage doesn't immediately break a digest.
 
-**Both delivery channels in v1.** Email is fully automated. WhatsApp is a formatted plain-text block the owner pastes into their group — this avoids Meta Business API business verification and template approval, which can take weeks and would block validating the core value prop. Automating WhatsApp is a fast-follow once owners confirm they want it.
+**WhatsApp via deep link, not the Cloud API.** Group sending on the Cloud API requires Official Business Account status, unavailable to a private hobby tool, and business-initiated 1:1 messages need pre-approved templates plus per-conversation cost. The deep link avoids all of it at the cost of one owner tap — and the owner was already posting manually, so this strictly improves their workflow. Email stays fully automated and first-class for owners who prefer it.
+
+**Owner-entered pot total, not headcount × fee.** Deriving the pot from `standings.results` count would silently undercount past 50 managers (pagination) and at season start (`new_entries`). Having the owner type the total deletes both failure modes rather than working around them. Pagination and `new_entries` still matter for the standings table itself.
+
+**Capture manager history from GW 1.** The narrative stats ship last (Phase 4), but `entry/{id}/history` cannot be backfilled for managers who join mid-season. Snapshotting ~20 calls per GW from the start turns those stats into pure queries later. This is an ordering constraint, not a feature.
 
 ## Deferred
 
 Not in the MVP; see [ROADMAP.md](./ROADMAP.md) for the full list.
 
-- **WhatsApp Business Cloud API / Twilio automation** — replaces the copy-paste step
+- **WhatsApp Business Cloud API automation** — replaces the owner's tap; gated on Official Business Account status
+- **Per-manager paid tracking** — start-of-season, non-recurring
 - **Member-facing auth** — only needed once members get personal recaps, polls, or a login
 - **Multi-league / multi-season support** — schema should not actively prevent it, but v1 assumes one league per owner
 - **H2H leagues** — different standings model; classic only for now
