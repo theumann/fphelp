@@ -57,7 +57,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 
 ### Phase 0 — verify the API
 - ✅ **Done 2026-08-03** for `bootstrap-static/` (fully confirmed) and the response envelopes of `event-status/`, `leagues-classic/{id}/standings/`, `entry/{id}/history`
-- ⏳ **Blocked until GW1 completes (deadline 2026-08-21)** — `standings.results[]` and `history.current[]` element fields, and the live value of `event-status.leagues`, are all empty pre-season. Re-run the diff after GW1 is scored and record fixtures then
+- ⏳ **Blocked until GW1 completes (deadline 2026-08-21)** — `standings.results[]` and `history.current[]` element fields, and the live value of `event-status.leagues`, are all empty pre-season. **See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md)** for the full checklist to run then
 - One throwaway `whatsapp://send?text=` link with a realistic full-length digest, tapped on the owner's real phone, to confirm group selection works and nothing is truncated
 - One league hardcoded; no setup UI yet
 
@@ -77,7 +77,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
 - **Email digest** — same content, HTML
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
-  - ⚠️ **Verify the urgency on 21 Aug.** The original research said this "cannot be backfilled". That looks too strong: `current[]` returns a manager's *whole season* to date, so a manager present in the league today can be backfilled. What genuinely cannot be recovered is a manager who **leaves** the league — their entry ID disappears from standings — and any league-relative fact about who was a member at the time. If backfill does work, this stops being an ordering constraint on Phase 1 and becomes a nice-to-have.
+  - ⚠️ **Verify the urgency on 21 Aug** — item 1 of [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md). The "cannot be backfilled" claim looks too strong, and if backfill works this stops being an ordering constraint on Phase 1.
 
 ### Phase 2 — money pot, dues and winnings
 - Owner enters the **pot total directly**, plus prize rules, configured once at setup

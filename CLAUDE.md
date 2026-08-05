@@ -4,6 +4,8 @@ Automates a private FPL league owner's group communications — standings, resul
 
 See [ROADMAP.md](./ROADMAP.md) for scope and [ARCHITECTURE.md](./ARCHITECTURE.md) for design.
 
+> **Before 21 Aug 2026:** several API shapes are unconfirmed because the season hasn't started — anything marked ⚠️ in ARCHITECTURE.md is taken on trust. When GW1 is scored, work through [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) before writing code that depends on those fields.
+
 ## Stack
 
 TypeScript / Node 22, Next.js App Router, Postgres + Drizzle on Railway, Resend for email, Vitest + Playwright.
