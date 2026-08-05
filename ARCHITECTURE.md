@@ -71,7 +71,7 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 |---|---|
 | `users` | app accounts: email, magic-link identity |
 | `leagues` | league id, name, `start_event`, `pot_total`, `currency`, optional display-only entry fee |
-| `league_users` | **join table**: `(league_id, user_id, role)`, unique on `(league_id, user_id)` |
+| `league_users` | **join table**: `(league_id, user_id, role, manager_entry?)`, unique on `(league_id, user_id)` |
 | `managers` | FPL entries: `entry`, `entry_name`, `player_name`, league membership |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
 | `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
@@ -88,6 +88,13 @@ Two consequences the digest pipeline has to respect:
 
 - **A digest is prepared once per league, not once per admin.** The `(league_id, gameweek, kind)` constraint already enforces this, and it must not gain a `user_id` — otherwise two co-owners each get a digest prepared and the league gets the message twice. Notification fan-out is separate: *every* co-owner may be emailed, but they share one prepared digest and one delivery row.
 - **"Marked as sent" is shared state.** When one co-owner sends, the other must see that. Record `marked_sent_by` so the UI can say *who* sent it, and surface it to both — otherwise the second co-owner sends a duplicate to the group. This is the main new failure mode co-ownership introduces.
+
+**The owner's own manager ID lives on `league_users`, not `leagues`.** It is used to sign the digest — `[Manager Name] — [Team Name] Manager and [League Name] Admin` — and co-owners have different FPL entries, so the signature depends on *who sends*. Consequences:
+
+- The signature is applied at **send/render time from the sending owner's row**, never baked into the stored `digests` payload, which is shared between co-owners.
+- It is **optional**: an owner may administer a league without playing in it (the treasurer, plausibly). Fall back to a plain name, or omit the signature entirely.
+- Name and team name come from `entry/{id}` (`player_first_name`, `player_last_name`, `name`); league name from `league.name`. No new endpoint.
+- It costs characters against the digest length budget, and it is **per-sender**, so the budget check must run against the longest owner's signature, not a generic one.
 
 `role` is recorded (`communicator`, `treasurer`) but **carries no permission logic in v1** — every owner can do everything. It exists so that role-based access later is an enum-and-policy change rather than a schema migration.
 
@@ -136,7 +143,14 @@ Applying the default split (below) to that $1,130 remainder:
 | 6th | 4 | $45.20 |
 | | **100** | **$1,130.00** |
 
-This case reconciles exactly, with no rounding remainder — which makes it a weak test. Unit tests should use a pot that *doesn't* divide cleanly, to exercise the derive-the-last-place rule.
+This case reconciles exactly — and so will every other headcount. With a whole-dollar pot and integer percentages the remainder is always a whole number of dollars, so `dollars × pct` is always whole cents. **Changing the number of managers will not produce a rounding case.**
+
+Rounding only arises from:
+- **tie splits** — $10 pooled between three tied managers is $3.333…, the main real-world case
+- **fractional percentages** — e.g. a league using 33.33%
+- **a non-whole-dollar pot**
+
+Unit tests must use one of those to exercise the derive-the-last-place rule; varying the headcount tests nothing.
 
 Applying the percentages to `pot_total` instead over-commits the pot, and the shortfall only surfaces at season end when the treasurer pays out. Two validations belong in setup, not in a test:
 

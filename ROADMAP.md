@@ -46,6 +46,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 ### Phase 1 — standings digest + deep-link send
 - **League setup (one-time)** — owner enters the **numeric** league ID; validate via `leagues-classic/{id}/standings/`. Note the invite code (e.g. `1xrliv`) is *not* the API ID and cannot be resolved to one without authentication — the UI must ask for the number from the league URL and say so
 - **Co-owners** — a league can have more than one owner; invite a second owner by email. One shared prepared digest and one shared "sent" state between them, not one each. A `role` (`communicator` / `treasurer`) is recorded but grants nothing yet
+- **Owner's own manager ID** — each owner optionally supplies their FPL entry ID, used to sign the digest: `[Manager Name] — [Team Name] Manager and [League Name] Admin`. It belongs to the *owner*, not the league, since co-owners sign differently; the signature is applied at send time by whoever sends, not stored in the shared digest. Optional, since an owner may not play in the league they administer
 - **Automated gameweek digest**
   - Triggered when the GW is genuinely final — see "Trigger condition" below, not `finished` alone
   - Content, all free from one standings call (`ClassicLeagueEntry`: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `total`, `event_total`):
@@ -94,7 +95,6 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 ## Open questions
 
 - **Digest cadence** — every GW, or weekly/monthly summaries too?
-- **Does v1 need the owner's own manager ID**, or is the league ID sufficient?
 
 ## Known risks
 
