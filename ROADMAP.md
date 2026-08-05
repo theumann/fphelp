@@ -63,7 +63,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Prize rules** — three kinds cover the reference league:
   - fixed amount to each **gameweek winner**
   - fixed amount to the **season's single highest gameweek score**
-  - **percentage to each of the top 6** at season end
+  - **percentage to each of the top N** at season end, with **N and each percentage configurable by the owner** at setup (6 in the reference league). Validated as contiguous ranks from 1, percentages summing to 100%. Editable mid-season; locked once the ledger is finalised
 - **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May. Re-validate on every pot edit, since managers keep joining
 - **Winnings ledger** — who won what, accruing per gameweek. GW-winner amounts are final once a GW is scored; rank and best-GW prizes stay *provisional* until the final gameweek
 - **Tie handling** — pool the prizes for the tied positions and split evenly (see ARCHITECTURE.md). Detect ties on `rank`, never `rank_sort`
@@ -93,7 +93,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Open questions
 
-- **Top-6 percentage split** — the six percentages applied to the remainder are not yet decided
+- **Top-6 percentage split** — the six percentages applied to the remainder are not yet decided. The app takes them as configuration, so this blocks using the reference league, not building it
 - **Digest cadence** — every GW, or weekly/monthly summaries too?
 - **Does v1 need the owner's own manager ID**, or is the league ID sufficient?
 

@@ -99,7 +99,7 @@ Prizes are configured once at league setup and then computed, never hand-entered
 |---|---|---|
 | `gw_winner_fixed` | every gameweek | fixed amount to that GW's top `event_total` |
 | `season_best_gw_fixed` | season end | fixed amount to the single highest `event_total` of the season |
-| `season_rank_pct` | season end | percentage to each of the top N final ranks (N = 6 here) |
+| `season_rank_pct` | season end | percentage to each of the top N final ranks — **N is configurable**, 6 in the reference league |
 
 **Fixed amounts come off the top; percentages apply to the remainder.** This is the one piece of arithmetic that must not be got wrong:
 
@@ -131,6 +131,21 @@ Applying the percentages to `pot_total` instead over-commits the pot, and the sh
 
 Because managers keep joining early in the season, `pot_total` is editable and both validations must re-run on every edit — not only at first setup.
 
+### Configurable paid places
+
+The number of paid places is **owner-configurable**, and needs no extra schema: it is simply how many `season_rank_pct` rows a league has, each carrying its own `rank` and percentage. Six rows gives the reference league's top 6; three rows gives a league that pays 1st–3rd.
+
+Validation on the set:
+
+- `rank` values are **contiguous from 1** with no gaps or duplicates — a league paying 1st, 2nd and 4th is a data-entry mistake, not a rule
+- percentages sum to exactly 100%, using decimal arithmetic (see below)
+- at least one row; the count should not exceed the number of managers in the league
+- each percentage is > 0 — a paid place worth nothing should be removed, not stored as zero
+
+**Editing mid-season is allowed** and simply changes the provisional projections, which is the point of marking them provisional. But once the final gameweek is scored and the ledger is finalised, prize rules **lock** — otherwise editing a percentage silently rewrites history in the `winnings` rows.
+
+Store percentages as **decimals, not floats**, and derive the last place's amount as `remainder − sum(others)` so rounding can never make the payouts miss the pot by a cent.
+
 **Provisional vs final.** GW-winner amounts are known and `final` the moment a gameweek is scored, and accrue into `winnings` as the season runs. Rank and best-GW prizes are `provisional` until the last gameweek is scored — displayed as standings-based projections, recomputed each GW, and only frozen at season end. The ledger must never present a provisional figure as settled.
 
 ## Ties
@@ -141,7 +156,7 @@ Ties will happen, most often on `gw_winner_fixed`. The default policy is **pool 
 
 This single rule covers both cases naturally:
 - Two tied for 1st → pool 1st + 2nd, split evenly; the next manager takes 3rd.
-- Two tied for 6th → positions 6 and 7; 7th is worth nothing, so they split 6th between them.
+- Two tied for the last paid place (6th here) → positions 6 and 7; 7th is unpaid, so they split 6th between them. This works for any N because unpaid positions simply contribute zero to the pool.
 - Two tied GW winners → one prize position, so $15 becomes $7.50 each.
 
 It also conserves the pot by construction, which paying each tied manager in full does not.

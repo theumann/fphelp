@@ -39,6 +39,8 @@ These are the traps that produce silently wrong output rather than errors:
 - **Take the gameweek count from `events.length`**, never hardcode 38.
 - **Rank and best-GW winnings are `provisional`** until the final GW is scored. Only GW-winner amounts are final as they accrue. Never render a provisional figure as settled.
 - **Ties pool and split**: N managers tied at rank R take positions R…R+N−1, pool those prizes, divide equally. Paying each tied manager in full overdraws the pot.
+- **Paid places are configurable** — N is just the number of `season_rank_pct` rows. Validate contiguous ranks from 1 and percentages summing to 100%. Use decimals, and derive the last place as `remainder − sum(others)` so rounding can't miss the pot.
+- **Prize rules lock once the ledger is finalised.** Editing them mid-season only moves provisional projections; editing after season end rewrites settled `winnings` rows.
 - **Detect ties on `rank`, not `rank_sort`.** `rank_sort` imposes an arbitrary total order that makes a real tie look resolved; it's only for deciding where a rounding remainder lands.
 - **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
