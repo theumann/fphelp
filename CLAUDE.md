@@ -48,4 +48,5 @@ These are the traps that produce silently wrong output rather than errors:
 - **Detect ties on `rank`, not `rank_sort`.** `rank_sort` imposes an arbitrary total order that makes a real tie look resolved; it's only for deciding where a rounding remainder lands.
 - **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
-- **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress.
+- **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress. Cloudflare is a constraint we're subject to, not a vendor we use — Railway is the only host.
+- **Email needs a recipient list; WhatsApp doesn't.** The API gives no addresses, so `recipients` is owner-maintained and drifts from `managers`. Email is opt-in per league.

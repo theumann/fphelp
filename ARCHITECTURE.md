@@ -73,6 +73,7 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | `leagues` | league id, name, `start_event`, `pot_total`, `currency`, optional display-only entry fee |
 | `league_users` | **join table**: `(league_id, user_id, role, manager_entry?)`, unique on `(league_id, user_id)` |
 | `managers` | FPL entries: `entry`, `entry_name`, `player_name`, league membership |
+| `recipients` | owner-maintained email list for a league. Separate from `managers` — the API gives no addresses, so the two drift |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
 | `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
 | `dues` | per manager: `amount`, `paid`, `paid_at`, `note` |
@@ -309,6 +310,10 @@ Not testable: whether the owner actually sent the message inside WhatsApp. That'
 **Idempotent preparation.** Cron polling and any scheduled/manual send can both reach the prepare step. The `deliveries` unique constraint on `(league_id, gameweek, kind)` makes double-preparation impossible at the database level rather than by careful control flow.
 
 **Caching `bootstrap-static`.** It's large and changes rarely within a week (fixtures, deadlines, prices). A short TTL keeps request volume low and means a transient FPL outage doesn't immediately break a digest.
+
+**Two channels, asymmetric by nature.** WhatsApp needs no recipient data — the group exists and the deep link addresses nothing — but requires a tap on the owner's phone. Email can be sent fully server-side but needs an address list the FPL API cannot provide, so the owner must enter and maintain one. Neither dominates: WhatsApp is zero-setup but manual, email is setup-heavy but automatable. WhatsApp is the default; email is opt-in per league.
+
+**Railway is the only vendor choice here.** Cloudflare appears throughout these docs as a *constraint*, not a component — it fronts the FPL API and filters datacenter IPs. Nothing in this system is deployed to or bought from Cloudflare.
 
 **WhatsApp via deep link, not the Cloud API.** Group sending on the Cloud API requires Official Business Account status, unavailable to a private hobby tool, and business-initiated 1:1 messages need pre-approved templates plus per-conversation cost. The deep link avoids all of it at the cost of one owner tap — and the owner was already posting manually, so this strictly improves their workflow. Email stays fully automated and first-class for owners who prefer it.
 

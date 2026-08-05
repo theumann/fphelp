@@ -27,7 +27,11 @@ Three constraints follow:
 - **The link must be tapped on the owner's phone**, so delivery cannot complete server-side.
 - **Delivery state is `prepared` → optionally `marked sent`**, never "confirmed delivered".
 
-Email remains a first-class channel in its own right — the same digest, rendered as HTML.
+Email remains a supported channel — the same composed message, rendered as HTML — with one important asymmetry:
+
+**Email needs a recipient list; WhatsApp does not.** The FPL API exposes no contact details, only names and team names, and league members never log in. So email requires the owner to hand-enter every member's address and keep that list current as people join or leave. The WhatsApp group already exists and the deep link needs no addresses at all.
+
+Consequences: email is **opt-in per league**, not a default; the recipient list is owner-maintained (`recipients` table, independent of `managers`, since the two will drift); and a league using only WhatsApp never has to touch it. Email is, however, the one channel that can be sent **fully server-side** — no phone tap required — which is why it stays in scope.
 
 ## Composing a message
 
@@ -75,7 +79,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
   - Roster completeness: managers in `new_entries[]` do not appear in standings until the next GW is processed, and must still show up
 - **Composer** — pre-filled draft the owner edits freely, with per-message checkboxes for the generated blocks (defaults from league settings) and a live character budget
 - **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
-- **Email digest** — same content, HTML
+- **Email digest** — same composed message, HTML. **Opt-in**, and requires the owner to enter a recipient list first (see Delivery model). Deferrable within Phase 1 if WhatsApp lands first
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
   - ⚠️ **Verify the urgency on 21 Aug** — item 1 of [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md). The "cannot be backfilled" claim looks too strong, and if backfill works this stops being an ordering constraint on Phase 1.
 
