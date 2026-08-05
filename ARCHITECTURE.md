@@ -4,7 +4,7 @@ Working name. See [ROADMAP.md](./ROADMAP.md) for feature scope and future items.
 
 ## Overview
 
-FPheLp is a webapp that automates a private fantasy league owner's communications — standings, results, and money-pot updates — currently done by hand in WhatsApp/email. The MVP targets **EPL Fantasy classic private leagues** and is **owner-only**: league members never log in, they just receive the output in channels they already use.
+FPheLp is a webapp that automates a private fantasy league owner's communications — standings, results, and money-pot updates — currently done by hand in WhatsApp/email. The MVP targets **EPL Fantasy classic private leagues** and is **admin-only**: a league may have one or several co-owners who log in, but ordinary league members never do — they just receive the output in channels they already use.
 
 Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-party (run by the Premier League itself) but undocumented and unsupported — no versioning guarantees, so the fetch layer must be defensive.
 
@@ -62,15 +62,31 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 
 ## Data model
 
+**Naming, because "manager" is overloaded.** FPL calls a league participant a *manager* (the API calls one an `entry`). We also have people who *administer* a league in this app. Those are different populations — an admin may not even play in the league. Throughout the schema and code:
+
+- **`users`** — people with a login to this app (admins/co-owners)
+- **`managers`** — FPL entries competing in the league; they never log in
+
 | Table | Purpose |
 |---|---|
+| `users` | app accounts: email, magic-link identity |
 | `leagues` | league id, name, `start_event`, pot total, prize distribution rules |
-| `managers` | `entry`, `entry_name`, `player_name`, league membership |
+| `league_users` | **join table**: `(league_id, user_id, role)`, unique on `(league_id, user_id)` |
+| `managers` | FPL entries: `entry`, `entry_name`, `player_name`, league membership |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
 | `digests` | computed digest per league per GW: stored payload, both rendered forms |
-| `deliveries` | `kind`, `prepared_at`, `sent_at`; **unique on `(league_id, gameweek, kind)`** |
+| `deliveries` | `kind`, `prepared_by`, `prepared_at`, `sent_at`, `marked_sent_by`; **unique on `(league_id, gameweek, kind)`** |
 
-That unique constraint is load-bearing: polling plus a scheduled send would otherwise double-prepare. `sent_at` null means *unknown*, not failure — the owner's send happens inside WhatsApp and is unobservable.
+The `deliveries` unique constraint is load-bearing: polling plus a scheduled send would otherwise double-prepare. `sent_at` null means *unknown*, not failure — the send happens inside WhatsApp and is unobservable.
+
+**Co-ownership.** `league_users` is many-to-many in both directions from day one. That covers the immediate need — this league has two people administering it — and the same table covers one user running several leagues later, with no migration. Only the UI and scoping change.
+
+Two consequences the digest pipeline has to respect:
+
+- **A digest is prepared once per league, not once per admin.** The `(league_id, gameweek, kind)` constraint already enforces this, and it must not gain a `user_id` — otherwise two co-owners each get a digest prepared and the league gets the message twice. Notification fan-out is separate: *every* co-owner may be emailed, but they share one prepared digest and one delivery row.
+- **"Marked as sent" is shared state.** When one co-owner sends, the other must see that. Record `marked_sent_by` so the UI can say *who* sent it, and surface it to both — otherwise the second co-owner sends a duplicate to the group. This is the main new failure mode co-ownership introduces.
+
+`role` starts as a single value (`owner`) with no permission logic behind it. It exists so that a later distinction — say, an admin who can preview but not send — is an enum change rather than a schema change.
 
 ## Endpoint reference
 
@@ -161,6 +177,7 @@ Not in the MVP; see [ROADMAP.md](./ROADMAP.md) for the full list.
 - **WhatsApp Business Cloud API automation** — replaces the owner's tap; gated on Official Business Account status
 - **Per-manager paid tracking** — start-of-season, non-recurring
 - **Member-facing auth** — only needed once members get personal recaps, polls, or a login
-- **Multi-league / multi-season support** — schema should not actively prevent it, but v1 assumes one league per owner
+- **Multi-league support** — the `league_users` join table already permits one user across several leagues; deferred work is UI (league switcher) and scoping every query, not schema
+- **Multi-season support** — season rollover resets league and entry IDs
 - **H2H leagues** — different standings model; classic only for now
 - **Other fantasy platforms** — would require abstracting the FPL client into a per-platform data-fetch interface

@@ -18,6 +18,8 @@ Not yet scaffolded — fill in once `package.json` exists.
 - FPL API responses are captured as **recorded fixtures** for tests. The API is unofficial and shifts between seasons — fixtures double as a change detector.
 - One template renders both the HTML email and the plaintext WhatsApp payload.
 
+- **"Manager" means an FPL entry** competing in the league (`managers` table). A person who logs in here is an **owner** (`users` + `league_users`). Don't conflate them.
+
 ## Gotchas
 
 These are the traps that produce silently wrong output rather than errors:
@@ -31,4 +33,6 @@ These are the traps that produce silently wrong output rather than errors:
 - **Digest length budget: ~1,500 chars URL-encoded.** Newlines cost `%0A`; table padding is pure cost.
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
 - **Delivery is never "confirmed".** `prepared` → optionally `marked sent`; a null `sent_at` means unknown, not failed.
+- **A league can have several owners, but one digest.** Never add `user_id` to the `deliveries` unique key — co-owners share one prepared digest and one "sent" state, or the group gets the message twice.
+- **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
 - **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress.

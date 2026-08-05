@@ -5,7 +5,9 @@
 ## Purpose
 Facilitate a private fantasy league owner's communications with their group (WhatsApp/email), by automating standings, results, and money-pot updates instead of manual posting.
 
-Primary actor: **the league owner/manager**. League members are recipients of content (digests pushed to channels they already use), not users of a separate app.
+Primary actor: **the league's owner(s)** — a league may be administered by more than one person, and both need access. Ordinary league members are recipients of content (digests pushed to channels they already use), not users of a separate app.
+
+Note on terminology: FPL calls a league *participant* a "manager". In this project **manager** always means an FPL entry competing in the league, and **owner/co-owner** means a person with a login here. They overlap but are not the same population.
 
 First target: English Premier League Fantasy (FPL) classic private leagues, via the unofficial-but-first-party FPL API (fantasy.premierleague.com).
 
@@ -42,7 +44,8 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - One league hardcoded; no setup UI yet
 
 ### Phase 1 — standings digest + deep-link send
-- **League setup (one-time)** — owner enters private league ID; validate via `leagues-classic/{id}/standings/`
+- **League setup (one-time)** — owner enters the **numeric** league ID; validate via `leagues-classic/{id}/standings/`. Note the invite code (e.g. `1xrliv`) is *not* the API ID and cannot be resolved to one without authentication — the UI must ask for the number from the league URL and say so
+- **Co-owners** — a league can have more than one owner; invite a second owner by email. One shared prepared digest and one shared "sent" state between them, not one each
 - **Automated gameweek digest**
   - Triggered when the GW is genuinely final — see "Trigger condition" below, not `finished` alone
   - Content, all free from one standings call (`ClassicLeagueEntry`: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `total`, `event_total`):
@@ -92,7 +95,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 - **Season rollover** resets league and gameweek IDs
 
 ### Explicitly out of MVP
-- Multi-league support
+- Multi-league support (co-*owners* are in; one owner across many *leagues* is not)
 - Member-facing polls/predictions
 - H2H leagues (classic only for v1)
 - Public shareable web page
@@ -106,7 +109,8 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 - **Per-manager paid tracking** — a checkbox per manager for who has paid in. Start-of-season, non-recurring, so it doesn't earn MVP scope
 - **WhatsApp Business Cloud API delivery** — fully server-side sending, gated on Official Business Account status
 - **Variable/uneven entry fees or side-pots** — beyond the flat-fee assumption (e.g. optional side bets, buy-ins mid-season)
-- **Multi-league support** — one owner running several leagues/seasons from one dashboard
+- **Multi-league support** — one owner running several leagues/seasons from one dashboard. The MVP's `league_users` join table already allows this; the deferred work is the league switcher and scoping every query, not a schema change
+- **Owner roles/permissions** — e.g. a co-owner who can preview but not send. v1 gives every owner the same rights
 - **H2H (head-to-head) league support** — different standings model than classic
 - **Member-facing features** — personal weekly recap, H2H trash-talk stats, predictions/polls embedded in digest, public read-only standings page
 - **Public shareable web page** per league (no login, just a link)
