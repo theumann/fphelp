@@ -77,18 +77,22 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
 | `dues` | per manager: `amount`, `paid`, `paid_at`, `note` |
 | `winnings` | ledger: `manager_entry`, `rule_kind`, `gameweek`, `amount`, `status` (`provisional` \| `final`) |
-| `digests` | computed **structured stats** per league per GW (JSON), not rendered text — see Digest composition |
-| `messages` | the owner's draft and final sent text, plus which blocks were included |
-| `deliveries` | `kind`, `prepared_by`, `prepared_at`, `sent_at`, `marked_sent_by`; **unique on `(league_id, gameweek, kind)`** |
+| `digests` | computed **structured stats** per league per GW (JSON), not rendered text. **Unique on `(league_id, gameweek)`** |
+| `messages` | the owner's draft and `sent_text`, blocks included, `created_by`, `sent_at`, `marked_sent_by`. **Many per gameweek** |
 
-The `deliveries` unique constraint is load-bearing: polling plus a scheduled send would otherwise double-prepare. `sent_at` null means *unknown*, not failure — the send happens inside WhatsApp and is unobservable.
+**Idempotency applies to the digest, not to messages.** These are two different concerns and conflating them breaks one of them:
+
+- **`digests` is unique on `(league_id, gameweek)`** — the computed stats for a gameweek exist once. This is what stops a cron poll and a manual refresh from double-preparing, and it is load-bearing.
+- **`messages` is deliberately many-per-gameweek.** The owner may well send a results post and then a midweek follow-up off the same digest. A uniqueness constraint here would block legitimate sends.
+
+`sent_at` null means *unknown*, not failure — the send happens inside WhatsApp and is unobservable.
 
 **Co-ownership.** `league_users` is many-to-many in both directions from day one. That covers the immediate need — this league has two people administering it — and the same table covers one user running several leagues later, with no migration. Only the UI and scoping change.
 
 Two consequences the digest pipeline has to respect:
 
-- **A digest is prepared once per league, not once per admin.** The `(league_id, gameweek, kind)` constraint already enforces this, and it must not gain a `user_id` — otherwise two co-owners each get a digest prepared and the league gets the message twice. Notification fan-out is separate: *every* co-owner may be emailed, but they share one prepared digest and one delivery row.
-- **"Marked as sent" is shared state.** When one co-owner sends, the other must see that. Record `marked_sent_by` so the UI can say *who* sent it, and surface it to both — otherwise the second co-owner sends a duplicate to the group. This is the main new failure mode co-ownership introduces.
+- **A digest is prepared once per league, not once per admin.** The `(league_id, gameweek)` constraint enforces this and must not gain a `user_id`. Notification fan-out is separate: *every* co-owner may be emailed, but they share one set of computed stats.
+- **Sent messages are shared state.** When one co-owner sends, the other must see it — including any draft in progress, so two people don't independently write the same week's update. Record `created_by` and `marked_sent_by` and surface both. This is the main failure mode co-ownership introduces, and the composer widens it: a draft is now something a co-owner can duplicate effort on, not just a send they can repeat.
 
 **The owner's own manager ID lives on `league_users`, not `leagues`.** It is used to sign the digest — `[Manager Name] — [Team Name] Manager and [League Name] Admin` — and co-owners have different FPL entries, so the signature depends on *who sends*. Consequences:
 

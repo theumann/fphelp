@@ -36,7 +36,7 @@ These are the traps that produce silently wrong output rather than errors:
 - **The app never sends on the owner's behalf.** It prepares a draft; the owner writes, composes and taps. There is no automatic cadence.
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
 - **Delivery is never "confirmed".** `prepared` → optionally `marked sent`; a null `sent_at` means unknown, not failed.
-- **A league can have several owners, but one digest.** Never add `user_id` to the `deliveries` unique key — co-owners share one prepared digest and one "sent" state, or the group gets the message twice.
+- **Idempotency is on `digests`, not `messages`.** `digests` is unique per `(league_id, gameweek)` so polling can't double-prepare; `messages` is deliberately many-per-gameweek, since the owner may send a follow-up. Never add `user_id` to the digest key — co-owners share one digest and one visible sent/draft state.
 - **Fixed prizes come off the top; percentages apply to the remainder.** `remainder = pot − (gw_winner × gameweeks) − season_best_gw`, then top-6 percentages apply to `remainder`. Applying them to the whole pot over-commits it and only surfaces at season end. Re-validate on every pot edit.
 - **Take the gameweek count from `events.length`**, never hardcode 38.
 - **Rank and best-GW winnings are `provisional`** until the final GW is scored. Only GW-winner amounts are final as they accrue. Never render a provisional figure as settled.

@@ -76,7 +76,8 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Composer** — pre-filled draft the owner edits freely, with per-message checkboxes for the generated blocks (defaults from league settings) and a live character budget
 - **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
 - **Email digest** — same content, HTML
-- **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4. It cannot be backfilled for managers who join mid-season.
+- **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
+  - ⚠️ **Verify the urgency on 21 Aug.** The original research said this "cannot be backfilled". That looks too strong: `current[]` returns a manager's *whole season* to date, so a manager present in the league today can be backfilled. What genuinely cannot be recovered is a manager who **leaves** the league — their entry ID disappears from standings — and any league-relative fact about who was a member at the time. If backfill does work, this stops being an ordering constraint on Phase 1 and becomes a nice-to-have.
 
 ### Phase 2 — money pot, dues and winnings
 - Owner enters the **pot total directly**, plus prize rules, configured once at setup
@@ -94,9 +95,10 @@ Reference league config (this league): $100 entry × 18+ managers, $15 per gamew
 - Entry fee is optional, display-only ("£20 × 18 players") — no longer load-bearing
 - Digest includes pot total and this week's winner's prize alongside standings
 
-### Phase 3 — deadline reminders + manual send
+### Phase 3 — deadline reminders
 - Scheduled reminder before each GW deadline (`events[].deadline_time`)
-- On-demand "send now" outside the automated schedule
+
+*(The original "manual send now" item is gone — since the owner composes and sends every message themselves, on-demand sending is Phase 1's composer, not a separate feature.)*
 
 ### Phase 4 — season narrative stats
 - Manager of the month, worst GW ever, longest streak — pure queries over the history captured since Phase 1
