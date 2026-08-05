@@ -63,13 +63,13 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Prize rules** — three kinds cover the reference league:
   - fixed amount to each **gameweek winner**
   - fixed amount to the **season's single highest gameweek score**
-  - **percentage to each of the top N** at season end, with **N and each percentage configurable by the owner** at setup (6 in the reference league). Validated as contiguous ranks from 1, percentages summing to 100%. Editable mid-season; locked once the ledger is finalised
+  - **percentage to each of the top N** at season end, with **N and each percentage configurable by the owner** at setup. Defaults to 6 places at **40 / 25 / 15 / 10 / 6 / 4**. Validated as contiguous ranks from 1, percentages summing to 100%. Editable mid-season; locked once the ledger is finalised
 - **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May. Re-validate on every pot edit, since managers keep joining
 - **Winnings ledger** — who won what, accruing per gameweek. GW-winner amounts are final once a GW is scored; rank and best-GW prizes stay *provisional* until the final gameweek
 - **Tie handling** — pool the prizes for the tied positions and split evenly (see ARCHITECTURE.md). Detect ties on `rank`, never `rank_sort`
 - **Manual override of final positions** at season end — the escape hatch for leagues with their own tie-breaking rules, without modelling any of them
 
-Reference league config (this league): $100 entry × 18+ managers, $15 per gameweek winner, $100 for the season's best gameweek, remainder split across the top 6 by percentages **still to be decided**.
+Reference league config (this league): $100 entry × 18+ managers, $15 per gameweek winner, $100 for the season's best gameweek, remainder split across the top 6 at 40 / 25 / 15 / 10 / 6 / 4. At 18 managers that is a $1,800 pot, $670 committed to fixed prizes, $1,130 to the top 6.
 - **Dues tracking** — per-manager paid / not paid, for the treasurer
 - Entry fee is optional, display-only ("£20 × 18 players") — no longer load-bearing
 - Digest includes pot total and this week's winner's prize alongside standings
@@ -93,7 +93,6 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Open questions
 
-- **Top-6 percentage split** — the six percentages applied to the remainder are not yet decided. The app takes them as configuration, so this blocks using the reference league, not building it
 - **Digest cadence** — every GW, or weekly/monthly summaries too?
 - **Does v1 need the owner's own manager ID**, or is the league ID sufficient?
 
@@ -133,3 +132,9 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 - **Support for other fantasy league platforms** beyond EPL FPL:
   - Other football leagues with fantasy platforms (e.g. Champions League Fantasy)
   - Other sports' fantasy platforms (NFL, NBA, etc.) — would require abstracting the data-fetch layer per platform's API/scraping needs, since none will share FPL's endpoint shapes
+
+### Monetisation *(exploratory — not decided)*
+
+- **Ads, with a paid tier to remove them.** Recorded as a possibility, not a commitment. Nothing in the MVP should be built to assume it, but two things are worth knowing before it is ever picked up:
+  - It requires **multi-tenancy and billing** — accounts, plans, payment handling — none of which the single-league MVP has. The `league_users` join table is the seed of it, but it is a substantial addition, not a toggle.
+  - **Ads sit awkwardly with the delivery model.** The digest's main surface is a WhatsApp message the owner sends to their own friends; putting advertising in it would be sending ads on the owner's behalf. Any ad placement realistically lives in the owner-facing web app, not in the digest — which is a much smaller surface than it first appears.

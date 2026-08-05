@@ -124,6 +124,20 @@ Worked example, the reference league at 18 managers × $100:
 
 Note the fixed commitments are constant at $670 whatever the headcount, so **the remainder is what absorbs new managers** — at 20 it's $1,330. That also sets the floor: below 7 managers the fixed prizes exceed the pot.
 
+Applying the default split (below) to that $1,130 remainder:
+
+| Place | % | Amount |
+|---|---|---|
+| 1st | 40 | $452.00 |
+| 2nd | 25 | $282.50 |
+| 3rd | 15 | $169.50 |
+| 4th | 10 | $113.00 |
+| 5th | 6 | $67.80 |
+| 6th | 4 | $45.20 |
+| | **100** | **$1,130.00** |
+
+This case reconciles exactly, with no rounding remainder — which makes it a weak test. Unit tests should use a pot that *doesn't* divide cleanly, to exercise the derive-the-last-place rule.
+
 Applying the percentages to `pot_total` instead over-commits the pot, and the shortfall only surfaces at season end when the treasurer pays out. Two validations belong in setup, not in a test:
 
 - `committed_fixed ≤ pot_total`, with the remainder shown live as the owner types
@@ -134,6 +148,8 @@ Because managers keep joining early in the season, `pot_total` is editable and b
 ### Configurable paid places
 
 The number of paid places is **owner-configurable**, and needs no extra schema: it is simply how many `season_rank_pct` rows a league has, each carrying its own `rank` and percentage. Six rows gives the reference league's top 6; three rows gives a league that pays 1st–3rd.
+
+**Default for a new league: 6 places at 40 / 25 / 15 / 10 / 6 / 4 percent.** Seeded at setup and editable from there — a default, not a constraint.
 
 Validation on the set:
 
