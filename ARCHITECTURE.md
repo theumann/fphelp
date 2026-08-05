@@ -77,7 +77,8 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
 | `dues` | per manager: `amount`, `paid`, `paid_at`, `note` |
 | `winnings` | ledger: `manager_entry`, `rule_kind`, `gameweek`, `amount`, `status` (`provisional` \| `final`) |
-| `digests` | computed digest per league per GW: stored payload, both rendered forms |
+| `digests` | computed **structured stats** per league per GW (JSON), not rendered text — see Digest composition |
+| `messages` | the owner's draft and final sent text, plus which blocks were included |
 | `deliveries` | `kind`, `prepared_by`, `prepared_at`, `sent_at`, `marked_sent_by`; **unique on `(league_id, gameweek, kind)`** |
 
 The `deliveries` unique constraint is load-bearing: polling plus a scheduled send would otherwise double-prepare. `sent_at` null means *unknown*, not failure — the send happens inside WhatsApp and is unobservable.
@@ -97,6 +98,28 @@ Two consequences the digest pipeline has to respect:
 - It costs characters against the digest length budget, and it is **per-sender**, so the budget check must run against the longest owner's signature, not a generic one.
 
 `role` is recorded (`communicator`, `treasurer`) but **carries no permission logic in v1** — every owner can do everything. It exists so that role-based access later is an enum-and-policy change rather than a schema migration.
+
+## Digest composition
+
+The generated digest is a **pre-filled draft, not a finished message**. The owner writes their own commentary each week and chooses which generated blocks to include around it. This is the primary flow — the app does not compose on the owner's behalf and send.
+
+Available blocks:
+
+| Block | Content |
+|---|---|
+| `overall_standings` | full league table, rank movement |
+| `gw_results` | the last finished gameweek: winner, scores, league average, riser/faller |
+| `prize_structure` | the prize rules, and optionally winnings to date |
+
+Each block is **defaulted at league level and overridable per message**. The defaults are the owner's usual shape; the per-message toggles are for the week they want something different. Store defaults on the league and the actual selection on the `messages` row, so a sent message records what it contained rather than inferring it from settings that may since have changed.
+
+Three consequences:
+
+- **`digests` stores structured stats, not text.** Toggling a block re-renders from the same stored JSON — no re-fetch, no storing every combination. This is why the computation and rendering layers are already separate.
+- **The sent text must be stored.** Once the owner edits freely, the message is no longer reproducible from the API. `messages.sent_text` is the record of what the league actually received.
+- **The length budget becomes interactive.** Blocks have very different costs — `overall_standings` for a 20-manager league can consume most of the ~1,500-character budget on its own. The composer must show a **live remaining-characters count that updates as blocks are toggled and text is typed**, rather than failing at render time. This is the main UX constraint the block model introduces.
+
+**Cadence follows from this**: there is no fixed send schedule. The cron's job is to have a digest *ready*, not to send. Notifying the owner when a gameweek finishes is an **optional per-league setting**; the default flow is the owner opening the app when they feel like writing.
 
 ## Prize rules and the winnings ledger
 

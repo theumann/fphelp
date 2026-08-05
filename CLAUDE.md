@@ -31,7 +31,9 @@ These are the traps that produce silently wrong output rather than errors:
 - **`finished` ≠ safe to send.** It flips before bonus points apply. Gate on `event-status` (all `bonus_added`, `leagues === "Updated"`) cross-checked with `data_checked`.
 - **`event-status` returns `status: []` outside a live gameweek**, and `[].every(...)` is `true`. Require `status.length > 0` first or the gate opens on nothing.
 - **Never put a phone number in the WhatsApp link.** `wa.me/<number>?text=` opens an individual chat and makes groups unreachable — it still looks like a working link. Always `whatsapp://send?text=` / `https://wa.me/?text=` with no number.
-- **Digest length budget: ~1,500 chars URL-encoded.** Newlines cost `%0A`; table padding is pure cost.
+- **Digest length budget: ~1,500 chars URL-encoded.** Newlines cost `%0A`; table padding is pure cost. The composer must show this live as blocks are toggled — standings alone can eat most of it.
+- **`digests` stores structured stats, not rendered text.** Blocks are toggled per message, so rendering happens at send time from the stored JSON. Store the owner's final `sent_text` separately — once edited, it isn't reproducible from the API.
+- **The app never sends on the owner's behalf.** It prepares a draft; the owner writes, composes and taps. There is no automatic cadence.
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
 - **Delivery is never "confirmed".** `prepared` → optionally `marked sent`; a null `sent_at` means unknown, not failed.
 - **A league can have several owners, but one digest.** Never add `user_id` to the `deliveries` unique key — co-owners share one prepared digest and one "sent" state, or the group gets the message twice.

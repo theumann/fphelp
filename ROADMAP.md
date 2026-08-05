@@ -17,7 +17,9 @@ First target: English Premier League Fantasy (FPL) classic private leagues, via 
 
 The pipeline ends at the owner's thumb, not at a send call. WhatsApp's Cloud API is a dead end for this tool — group sending requires Official Business Account status, and business-initiated 1:1 messages need pre-approved templates plus per-conversation cost.
 
-Instead, v1 uses the **deep-link/share flow**: the server prepares a digest and gives the owner a one-tap link, `whatsapp://send?text=<urlencoded>` (https fallback `https://wa.me/?text=<urlencoded>`). WhatsApp opens a chat picker with the message pre-filled; the owner selects the league group and taps send.
+Instead, v1 uses the **deep-link/share flow**: the owner composes their message in the app, then taps a one-tap link, `whatsapp://send?text=<urlencoded>` (https fallback `https://wa.me/?text=<urlencoded>`). WhatsApp opens a chat picker with the message pre-filled; the owner selects the league group and taps send.
+
+The message itself is **written by the owner from a pre-filled draft**, not generated and sent on their behalf — see "Composing a message" below.
 
 Three constraints follow:
 
@@ -27,9 +29,25 @@ Three constraints follow:
 
 Email remains a first-class channel in its own right — the same digest, rendered as HTML.
 
+## Composing a message
+
+The owner writes their own creative update each week. The app supplies a **pre-filled draft**, not a finished message.
+
+Alongside their own text, the owner ticks which generated blocks to include:
+
+- **Overall standings** — the full league table with rank movement
+- **Last gameweek's results** — winner, scores, league average, riser/faller
+- **Prize structure** — the rules, optionally with winnings to date
+
+Each checkbox has a **default set at league level** and can be **overridden per message**. What was actually included is stored with the sent message, so history reflects what the league received rather than today's settings.
+
+There is **no fixed send cadence**. The scheduler's job is to have a digest ready, not to send it. An optional per-league notification can prompt the owner when a gameweek finishes; the default is simply that the draft is waiting when they open the app.
+
 ## Digest length budget
 
 Because the WhatsApp payload lives in a URL, length is a design constraint rather than a detail. Newlines become `%0A` and table padding is pure cost. Target **~1,500 characters encoded**, with a compact layout and a defined truncation strategy for large leagues.
+
+Since the owner composes the message, this budget is **interactive**: the composer shows a live remaining-character count that updates as text is typed and blocks are toggled. Including the full standings for a 20-manager league can consume most of the budget by itself, so the owner needs to see the cost of each checkbox as they tick it — not discover it at send time.
 
 ## MVP Feature Set
 
@@ -55,7 +73,8 @@ Each feature is annotated with its data source. "Free" means it needs no call be
     - GW winner (max `event_total`)
     - league average — **computed** as the mean of `event_total` across results
   - Roster completeness: managers in `new_entries[]` do not appear in standings until the next GW is processed, and must still show up
-- **Send page (mobile)** — rendered digest, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
+- **Composer** — pre-filled draft the owner edits freely, with per-message checkboxes for the generated blocks (defaults from league settings) and a live character budget
+- **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
 - **Email digest** — same content, HTML
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4. It cannot be backfilled for managers who join mid-season.
 
@@ -94,7 +113,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Open questions
 
-- **Digest cadence** — every GW, or weekly/monthly summaries too?
+*(None currently blocking — cadence and the owner's manager ID are both resolved above.)*
 
 ## Known risks
 
