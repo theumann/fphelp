@@ -74,6 +74,9 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | `league_users` | **join table**: `(league_id, user_id, role)`, unique on `(league_id, user_id)` |
 | `managers` | FPL entries: `entry`, `entry_name`, `player_name`, league membership |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
+| `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
+| `dues` | per manager: `amount`, `paid`, `paid_at`, `note` |
+| `winnings` | ledger: `manager_entry`, `rule_kind`, `gameweek`, `amount`, `status` (`provisional` \| `final`) |
 | `digests` | computed digest per league per GW: stored payload, both rendered forms |
 | `deliveries` | `kind`, `prepared_by`, `prepared_at`, `sent_at`, `marked_sent_by`; **unique on `(league_id, gameweek, kind)`** |
 
@@ -86,7 +89,37 @@ Two consequences the digest pipeline has to respect:
 - **A digest is prepared once per league, not once per admin.** The `(league_id, gameweek, kind)` constraint already enforces this, and it must not gain a `user_id` — otherwise two co-owners each get a digest prepared and the league gets the message twice. Notification fan-out is separate: *every* co-owner may be emailed, but they share one prepared digest and one delivery row.
 - **"Marked as sent" is shared state.** When one co-owner sends, the other must see that. Record `marked_sent_by` so the UI can say *who* sent it, and surface it to both — otherwise the second co-owner sends a duplicate to the group. This is the main new failure mode co-ownership introduces.
 
-`role` starts as a single value (`owner`) with no permission logic behind it. It exists so that a later distinction — say, an admin who can preview but not send — is an enum change rather than a schema change.
+`role` is recorded (`communicator`, `treasurer`) but **carries no permission logic in v1** — every owner can do everything. It exists so that role-based access later is an enum-and-policy change rather than a schema migration.
+
+## Prize rules and the winnings ledger
+
+Prizes are configured once at league setup and then computed, never hand-entered. Three rule kinds cover the reference league:
+
+| `kind` | When | Value |
+|---|---|---|
+| `gw_winner_fixed` | every gameweek | fixed amount to that GW's top `event_total` |
+| `season_best_gw_fixed` | season end | fixed amount to the single highest `event_total` of the season |
+| `season_rank_pct` | season end | percentage to each of the top N final ranks (N = 6 here) |
+
+**Fixed amounts come off the top; percentages apply to the remainder.** This is the one piece of arithmetic that must not be got wrong:
+
+```
+committed_fixed = (gw_winner_amount × number_of_gameweeks)
+                + season_best_gw_amount
+remainder       = pot_total − committed_fixed
+rank prizes     = season_rank_pct[i] × remainder
+```
+
+Applying the percentages to `pot_total` instead over-commits the pot, and the shortfall only surfaces at season end when the treasurer pays out. Two validations belong in setup, not in a test:
+
+- `committed_fixed ≤ pot_total`, with the remainder shown live as the owner types
+- `season_rank_pct` values sum to exactly 100% (of the remainder)
+
+**Provisional vs final.** GW-winner amounts are known and `final` the moment a gameweek is scored, and accrue into `winnings` as the season runs. Rank and best-GW prizes are `provisional` until the last gameweek is scored — displayed as standings-based projections, recomputed each GW, and only frozen at season end. The ledger must never present a provisional figure as settled.
+
+**Ties need a stated rule**, because they will happen — most often on `gw_winner_fixed`. Default: **split the amount evenly between tied managers**, rounded to the smallest currency unit with the remainder going to the higher `rank_sort`. Whatever is chosen, it must be explicit, because "two managers both got the full £10" quietly overdraws the pot.
+
+Note this design tracks **who won what**, not whether money changed hands. Marking a prize as actually paid out is deliberately deferred (see ROADMAP) — dues coming *in* are tracked, prizes going *out* are computed.
 
 ## Endpoint reference
 
@@ -96,10 +129,20 @@ Verified against live calls on 2026-08-03, **pre-season** for 2026/27 (GW1 deadl
 |---|---|
 | `bootstrap-static/` ✅ | `events[]` (38): `id`, `name`, `finished`, `data_checked`, `deadline_time`, `average_entry_score` (**global**, not league). Also present: `release_time`, `ranked_count`, `is_current`, `is_next`, `is_previous`, `highest_scoring_entry` |
 | `event-status/` ⚠️ | `{ status: [], leagues: "" }` pre-season. Envelope confirmed; `status[].bonus_added` and the `leagues === "Updated"` string are **not yet observed** |
-| `leagues-classic/{id}/standings/` ⚠️ | Top level: `league`, `standings`, `new_entries`, `last_updated_data`. `league.start_event` ✅. `standings`: `has_next`, `page`, `results[]` ✅ envelope. `results[]` elements unobserved: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total` |
+| `leagues-classic/{id}/standings/` ⚠️ | Top level: `league`, `standings`, `new_entries`, `last_updated_data`. `league` ✅: `id`, `name`, `created`, `closed`, `start_event`, `league_type` (`x` = private), `scoring` (`c` = classic), `admin_entry`. `standings`: `has_next`, `page`, `results[]` ✅ envelope. `new_entries.results[]` ✅: `entry`, `entry_name`, `joined_time`, `player_first_name`, `player_last_name`. `standings.results[]` elements still unobserved: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total` |
 | `entry/{id}/history` ⚠️ | Top level `current`, `past`, `chips` ✅. `past[]` ✅: `season_name`, `total_points`, `rank`, `rank_percentage`. `current[]` unobserved: `event`, `points`, `rank`, `total_points`, `points_on_bench`, `event_transfers_cost`, `overall_rank` |
 
 **`new_entries` is an object, not an array.** It carries the same pagination envelope as standings — `{ has_next, page, results }` — so it must be read as `new_entries.results` and paginated in its own right. (Corrected from the initial research, which had it as a bare `new_entries[]`.)
+
+**`new_entries` and `standings` have different element shapes.** Observed live on league 9999999 pre-season: 0 standings rows, 14 new entries. Combining them is a *normalisation*, not a union:
+
+| | `standings.results[]` | `new_entries.results[]` |
+|---|---|---|
+| Name | `player_name` | `player_first_name` + `player_last_name` |
+| Score fields | `total`, `event_total`, `rank`, `last_rank` | none |
+| Also | `entry`, `entry_name` | `entry`, `entry_name`, `joined_time` |
+
+So the digest needs an internal manager type that both map into, and a defined way to render a manager with **no scores yet** — before GW1 the entire league is in this state. Deduplicate on `entry`: a manager can plausibly appear in both during the GW that processes them.
 
 Two further traps in that table:
 - **`average_entry_score` is the global FPL average.** The league average must be computed as the mean of `event_total` across results. Substituting it is an invisible bug.

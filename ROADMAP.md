@@ -45,7 +45,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 
 ### Phase 1 — standings digest + deep-link send
 - **League setup (one-time)** — owner enters the **numeric** league ID; validate via `leagues-classic/{id}/standings/`. Note the invite code (e.g. `1xrliv`) is *not* the API ID and cannot be resolved to one without authentication — the UI must ask for the number from the league URL and say so
-- **Co-owners** — a league can have more than one owner; invite a second owner by email. One shared prepared digest and one shared "sent" state between them, not one each
+- **Co-owners** — a league can have more than one owner; invite a second owner by email. One shared prepared digest and one shared "sent" state between them, not one each. A `role` (`communicator` / `treasurer`) is recorded but grants nothing yet
 - **Automated gameweek digest**
   - Triggered when the GW is genuinely final — see "Trigger condition" below, not `finished` alone
   - Content, all free from one standings call (`ClassicLeagueEntry`: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `total`, `event_total`):
@@ -58,12 +58,18 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Email digest** — same content, HTML
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4. It cannot be backfilled for managers who join mid-season.
 
-### Phase 2 — money pot
-- Owner enters the **pot total directly**, plus prize distribution rules (e.g. 1st/2nd/3rd %, monthly prizes)
-- App applies distribution to the entered total; splits must sum to the pot
+### Phase 2 — money pot, dues and winnings
+- Owner enters the **pot total directly**, plus prize rules, configured once at setup
+- **Prize rules** — three kinds cover the reference league:
+  - fixed amount to each **gameweek winner**
+  - fixed amount to the **season's single highest gameweek score**
+  - **percentage to each of the top 6** at season end
+- **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May
+- **Winnings ledger** — who won what, accruing per gameweek. GW-winner amounts are final once a GW is scored; rank and best-GW prizes stay *provisional* until the final gameweek
+- **Tie rule** must be explicit (default: split evenly) — GW-winner ties are common and paying both in full overdraws the pot
+- **Dues tracking** — per-manager paid / not paid, for the treasurer
 - Entry fee is optional, display-only ("£20 × 18 players") — no longer load-bearing
-- Monthly prizes need `league.start_event` and `events[].deadline_time` to map gameweeks → months
-- Digest includes pot total / payout breakdown alongside standings
+- Digest includes pot total and this week's winner's prize alongside standings
 
 ### Phase 3 — deadline reminders + manual send
 - Scheduled reminder before each GW deadline (`events[].deadline_time`)
@@ -106,11 +112,12 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Future Roadmap
 
-- **Per-manager paid tracking** — a checkbox per manager for who has paid in. Start-of-season, non-recurring, so it doesn't earn MVP scope
+- **Payout tracking** — recording that a prize was actually handed over, as opposed to computing who won it. v1 tracks dues *in* and computes winnings *out*, but doesn't reconcile the second half
+- **Monthly prizes** — not used by the reference league; would need `league.start_event` and `events[].deadline_time` to map gameweeks → months
+- **Role-based permissions** — `role` is stored from v1 (`communicator`, `treasurer`) but grants nothing; every owner can do everything. The obvious first restriction is preventing the treasurer from sending to the group
 - **WhatsApp Business Cloud API delivery** — fully server-side sending, gated on Official Business Account status
 - **Variable/uneven entry fees or side-pots** — beyond the flat-fee assumption (e.g. optional side bets, buy-ins mid-season)
 - **Multi-league support** — one owner running several leagues/seasons from one dashboard. The MVP's `league_users` join table already allows this; the deferred work is the league switcher and scoping every query, not a schema change
-- **Owner roles/permissions** — e.g. a co-owner who can preview but not send. v1 gives every owner the same rights
 - **H2H (head-to-head) league support** — different standings model than classic
 - **Member-facing features** — personal weekly recap, H2H trash-talk stats, predictions/polls embedded in digest, public read-only standings page
 - **Public shareable web page** per league (no login, just a link)

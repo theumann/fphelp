@@ -26,7 +26,8 @@ These are the traps that produce silently wrong output rather than errors:
 
 - **League average must be computed** as the mean of `event_total` across standings results. `events[].average_entry_score` is the *global* FPL average — using it looks fine and is wrong.
 - **`standings.results` is paginated.** Follow `has_next` / `?page_standings=N` or managers past 50 vanish from the digest.
-- **`new_entries` is an object, not an array** — `{has_next, page, results}`, same envelope as standings. Its managers are invisible in standings until the next GW processes, so the roster is `standings.results ∪ new_entries.results`, each paginated.
+- **`new_entries` is an object, not an array** — `{has_next, page, results}`, same envelope as standings, paginated separately. Its managers are invisible in standings until the next GW processes: pre-season the real league had **0 standings rows and 14 new entries**.
+- **`new_entries` elements have a different shape** — `player_first_name`/`player_last_name` instead of `player_name`, and no score fields at all. Normalise both into one internal type, dedupe on `entry`, and handle "manager with no scores yet".
 - **`finished` ≠ safe to send.** It flips before bonus points apply. Gate on `event-status` (all `bonus_added`, `leagues === "Updated"`) cross-checked with `data_checked`.
 - **`event-status` returns `status: []` outside a live gameweek**, and `[].every(...)` is `true`. Require `status.length > 0` first or the gate opens on nothing.
 - **Never put a phone number in the WhatsApp link.** `wa.me/<number>?text=` opens an individual chat and makes groups unreachable — it still looks like a working link. Always `whatsapp://send?text=` / `https://wa.me/?text=` with no number.
@@ -34,5 +35,9 @@ These are the traps that produce silently wrong output rather than errors:
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
 - **Delivery is never "confirmed".** `prepared` → optionally `marked sent`; a null `sent_at` means unknown, not failed.
 - **A league can have several owners, but one digest.** Never add `user_id` to the `deliveries` unique key — co-owners share one prepared digest and one "sent" state, or the group gets the message twice.
+- **Fixed prizes come off the top; percentages apply to the remainder.** `remainder = pot − (gw_winner × 38) − season_best_gw`, then top-6 percentages apply to `remainder`. Applying them to the whole pot over-commits it and only surfaces at season end.
+- **Rank and best-GW winnings are `provisional`** until the final GW is scored. Only GW-winner amounts are final as they accrue. Never render a provisional figure as settled.
+- **Ties split the prize** by default. Paying two tied GW winners in full quietly overdraws the pot.
+- **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
 - **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress.
