@@ -35,9 +35,11 @@ These are the traps that produce silently wrong output rather than errors:
 - **Delivery must be idempotent** — `deliveries` is unique on `(league_id, gameweek, kind)`. Cron and manual send can both reach prepare.
 - **Delivery is never "confirmed".** `prepared` → optionally `marked sent`; a null `sent_at` means unknown, not failed.
 - **A league can have several owners, but one digest.** Never add `user_id` to the `deliveries` unique key — co-owners share one prepared digest and one "sent" state, or the group gets the message twice.
-- **Fixed prizes come off the top; percentages apply to the remainder.** `remainder = pot − (gw_winner × 38) − season_best_gw`, then top-6 percentages apply to `remainder`. Applying them to the whole pot over-commits it and only surfaces at season end.
+- **Fixed prizes come off the top; percentages apply to the remainder.** `remainder = pot − (gw_winner × gameweeks) − season_best_gw`, then top-6 percentages apply to `remainder`. Applying them to the whole pot over-commits it and only surfaces at season end. Re-validate on every pot edit.
+- **Take the gameweek count from `events.length`**, never hardcode 38.
 - **Rank and best-GW winnings are `provisional`** until the final GW is scored. Only GW-winner amounts are final as they accrue. Never render a provisional figure as settled.
-- **Ties split the prize** by default. Paying two tied GW winners in full quietly overdraws the pot.
+- **Ties pool and split**: N managers tied at rank R take positions R…R+N−1, pool those prizes, divide equally. Paying each tied manager in full overdraws the pot.
+- **Detect ties on `rank`, not `rank_sort`.** `rank_sort` imposes an arbitrary total order that makes a real tie look resolved; it's only for deciding where a rounding remainder lands.
 - **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
 - **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress.

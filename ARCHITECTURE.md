@@ -70,7 +70,7 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | Table | Purpose |
 |---|---|
 | `users` | app accounts: email, magic-link identity |
-| `leagues` | league id, name, `start_event`, pot total, prize distribution rules |
+| `leagues` | league id, name, `start_event`, `pot_total`, `currency`, optional display-only entry fee |
 | `league_users` | **join table**: `(league_id, user_id, role)`, unique on `(league_id, user_id)` |
 | `managers` | FPL entries: `entry`, `entry_name`, `player_name`, league membership |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
@@ -110,14 +110,45 @@ remainder       = pot_total − committed_fixed
 rank prizes     = season_rank_pct[i] × remainder
 ```
 
+`number_of_gameweeks` comes from `events.length` in `bootstrap-static` (38, confirmed live) — never hardcode it, so a shortened season doesn't silently over-commit.
+
+Worked example, the reference league at 18 managers × $100:
+
+| | |
+|---|---|
+| `pot_total` | $1,800 |
+| GW winners | 38 × $15 = $570 |
+| Season best GW | $100 |
+| `committed_fixed` | **$670** |
+| `remainder` (top 6) | **$1,130** |
+
+Note the fixed commitments are constant at $670 whatever the headcount, so **the remainder is what absorbs new managers** — at 20 it's $1,330. That also sets the floor: below 7 managers the fixed prizes exceed the pot.
+
 Applying the percentages to `pot_total` instead over-commits the pot, and the shortfall only surfaces at season end when the treasurer pays out. Two validations belong in setup, not in a test:
 
 - `committed_fixed ≤ pot_total`, with the remainder shown live as the owner types
 - `season_rank_pct` values sum to exactly 100% (of the remainder)
 
+Because managers keep joining early in the season, `pot_total` is editable and both validations must re-run on every edit — not only at first setup.
+
 **Provisional vs final.** GW-winner amounts are known and `final` the moment a gameweek is scored, and accrue into `winnings` as the season runs. Rank and best-GW prizes are `provisional` until the last gameweek is scored — displayed as standings-based projections, recomputed each GW, and only frozen at season end. The ledger must never present a provisional figure as settled.
 
-**Ties need a stated rule**, because they will happen — most often on `gw_winner_fixed`. Default: **split the amount evenly between tied managers**, rounded to the smallest currency unit with the remainder going to the higher `rank_sort`. Whatever is chosen, it must be explicit, because "two managers both got the full £10" quietly overdraws the pot.
+## Ties
+
+Ties will happen, most often on `gw_winner_fixed`. The default policy is **pool and split**:
+
+> N managers tied at rank R occupy positions R … R+N−1. Sum the prizes attached to those positions and divide equally between them.
+
+This single rule covers both cases naturally:
+- Two tied for 1st → pool 1st + 2nd, split evenly; the next manager takes 3rd.
+- Two tied for 6th → positions 6 and 7; 7th is worth nothing, so they split 6th between them.
+- Two tied GW winners → one prize position, so $15 becomes $7.50 each.
+
+It also conserves the pot by construction, which paying each tied manager in full does not.
+
+**Detect ties on `rank`, never on `rank_sort`.** The FPL API gives genuinely tied managers the *same* `rank`, and uses `rank_sort` to impose an arbitrary but stable total order. Ordering by `rank_sort` makes a tie look resolved and silently awards one manager the larger prize. `rank_sort` is only appropriate for deciding where a sub-cent rounding remainder lands.
+
+**Other leagues' tie-breakers are out of scope, with an escape hatch.** Real leagues break end-of-season ties on things the API doesn't expose consistently (fewest transfers, head-to-head, bench points), so encoding them is open-ended. v1 instead lets an owner **manually override final positions** at season end, which covers any league rule without modelling any of them. Configurable tie-break policies are on the ROADMAP.
 
 Note this design tracks **who won what**, not whether money changed hands. Marking a prize as actually paid out is deliberately deferred (see ROADMAP) — dues coming *in* are tracked, prizes going *out* are computed.
 

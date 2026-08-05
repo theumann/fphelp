@@ -64,9 +64,12 @@ Each feature is annotated with its data source. "Free" means it needs no call be
   - fixed amount to each **gameweek winner**
   - fixed amount to the **season's single highest gameweek score**
   - **percentage to each of the top 6** at season end
-- **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May
+- **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May. Re-validate on every pot edit, since managers keep joining
 - **Winnings ledger** — who won what, accruing per gameweek. GW-winner amounts are final once a GW is scored; rank and best-GW prizes stay *provisional* until the final gameweek
-- **Tie rule** must be explicit (default: split evenly) — GW-winner ties are common and paying both in full overdraws the pot
+- **Tie handling** — pool the prizes for the tied positions and split evenly (see ARCHITECTURE.md). Detect ties on `rank`, never `rank_sort`
+- **Manual override of final positions** at season end — the escape hatch for leagues with their own tie-breaking rules, without modelling any of them
+
+Reference league config (this league): $100 entry × 18+ managers, $15 per gameweek winner, $100 for the season's best gameweek, remainder split across the top 6 by percentages **still to be decided**.
 - **Dues tracking** — per-manager paid / not paid, for the treasurer
 - Entry fee is optional, display-only ("£20 × 18 players") — no longer load-bearing
 - Digest includes pot total and this week's winner's prize alongside standings
@@ -90,6 +93,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Open questions
 
+- **Top-6 percentage split** — the six percentages applied to the remainder are not yet decided
 - **Digest cadence** — every GW, or weekly/monthly summaries too?
 - **Does v1 need the owner's own manager ID**, or is the league ID sufficient?
 
@@ -113,6 +117,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 ## Future Roadmap
 
 - **Payout tracking** — recording that a prize was actually handed over, as opposed to computing who won it. v1 tracks dues *in* and computes winnings *out*, but doesn't reconcile the second half
+- **Configurable tie-breaking rules** — leagues that break ties on fewest transfers, head-to-head, bench points etc. v1 covers these with a manual override of final positions instead of encoding them
 - **Monthly prizes** — not used by the reference league; would need `league.start_event` and `events[].deadline_time` to map gameweeks → months
 - **Role-based permissions** — `role` is stored from v1 (`communicator`, `treasurer`) but grants nothing; every owner can do everything. The obvious first restriction is preventing the treasurer from sending to the group
 - **WhatsApp Business Cloud API delivery** — fully server-side sending, gated on Official Business Account status
