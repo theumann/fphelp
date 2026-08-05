@@ -52,4 +52,4 @@ The most interesting moment in the whole season for this app, and it only happen
 ## 6. Not blocked on GW1 — do these sooner
 
 - [ ] **Tap a real `whatsapp://send?text=` link on the owner's phone** with a synthetic full-length (~1,500 char) digest. Confirm the group picker appears, no phone number is in the URL, and nothing is truncated. This validates the delivery model and needs no league data at all.
-- [ ] **Confirm Railway's egress reaches the FPL API.** Residential IPs work; datacenter IPs are the documented risk and this is still unverified from a deployed container.
+- [x] ~~**Confirm Railway's egress reaches the FPL API.**~~ **Done 2026-08-05** — all four endpoints returned 200/JSON from the deployed container (egress IP `13.56.136.98`). Single sample; see ARCHITECTURE.md for why the proxy mitigation stays on the books.

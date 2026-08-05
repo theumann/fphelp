@@ -284,7 +284,18 @@ Rules, all of them failure modes rather than style:
 
 ## Egress and Cloudflare
 
-The FPL API sits behind Cloudflare and rejects many datacenter IPs. Residential IPs are fine — all four endpoints were fetched successfully from one on 2026-08-03 — so this is specifically a *hosting* risk, and it remains unverified from Railway itself. Confirm it from a deployed container before relying on the scheduler. It drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
+The FPL API sits behind Cloudflare and rejects many datacenter IPs.
+
+**✅ Verified reachable from Railway on 2026-08-05.** All four endpoints returned `200` with `application/json` from a deployed container (egress IP `13.56.136.98`, region `us-west2`), via the temporary `/api/egress-check` route. Content type matters here: a Cloudflare block serves an HTML challenge page, so JSON confirms a genuine pass rather than a soft failure.
+
+Two reasons this is not a closed question:
+
+- **It is one sample at one moment.** Cloudflare decisions are reputation-based and can change without notice, and Railway's egress IP is shared and not contractually stable. A block could appear mid-season.
+- **The mitigation therefore stays documented**: route FPL calls through an egress proxy with a stable, well-reputed IP. Changing host does not help — Fly.io is datacenter IPs too.
+
+The FPL client should treat a sudden run of `403`s, or an HTML content type where JSON is expected, as *the block has started* rather than as a transient error — and surface it loudly instead of retrying into a wall.
+
+This still drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
 
 ## Testing strategy
 
