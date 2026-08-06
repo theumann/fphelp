@@ -52,6 +52,6 @@ The most interesting moment in the whole season for this app, and it only happen
 ## 6. Not blocked on GW1 — do these sooner
 
 - [~] **Tap a real `whatsapp://send?text=` link on the owner's phone.** **Partially done 2026-08-06** via the deployed `/send` page: the chat picker appeared, WhatsApp opened, and the text arrived intact — but the message was sent to an **individual chat**, not a group.
-  - [ ] **Still to confirm: selecting a _group_ from the picker.** This is the case the no-phone-number rule exists for; the individual-chat path was never the doubtful one. Use a group containing only yourself to test without messaging the league.
-  - [ ] **Still to confirm: a full ~1,500 character digest.** Pre-season the message is short (no scores), so truncation behaviour at the budget ceiling is untested on a real device.
+  - [x] ~~**Selecting a _group_ from the picker.**~~ **Confirmed 2026-08-06** — message delivered to a real WhatsApp group. The delivery model is settled: no phone number in the URL, picker appears, group selectable, text intact.
+  - [ ] **Still to confirm: a full ~1,500 character digest** on a real device. Pre-season messages are short because nobody has scored. Use `/send?demo=1` (or `?demo=30` for a league large enough to truncate).
 - [x] ~~**Confirm Railway's egress reaches the FPL API.**~~ **Done 2026-08-05** — all four endpoints returned 200/JSON from the deployed container (egress IP `13.56.136.98`). Single sample; see ARCHITECTURE.md for why the proxy mitigation stays on the books.

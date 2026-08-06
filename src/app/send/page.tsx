@@ -1,4 +1,6 @@
 import { Composer } from '@/components/composer'
+import { ensureLeague, findDraft, upsertDigest } from '@/db/queries'
+import { demoRoster } from '@/lib/demo'
 import { computeDigestStats } from '@/lib/digest/stats'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
 import { gameweekCount, lastFinishedGameweek } from '@/lib/fpl/gameweek'
@@ -8,7 +10,12 @@ import { prizeSummary, REFERENCE_LEAGUE } from '@/lib/league-config'
 // Live FPL data — never serve a cached table as this week's result.
 export const dynamic = 'force-dynamic'
 
-export default async function SendPage() {
+export default async function SendPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ demo?: string }>
+}) {
+  const { demo } = await searchParams
   let standings
   let bootstrap
 
@@ -34,15 +41,36 @@ export default async function SendPage() {
     )
   }
 
-  const roster = buildRoster(standings)
+  // ?demo=1 substitutes a synthetic scored league so the ~1,500 char budget and the
+  // truncation path can be tested before GW1. Remove once the season starts.
+  const roster = demo ? demoRoster(Number(demo) > 1 ? Number(demo) : 18) : buildRoster(standings)
 
   // Pre-season there is no finished gameweek; show GW1 so the page still works.
-  const gameweek = lastFinishedGameweek(bootstrap) ?? 1
+  const gameweek = demo ? 5 : (lastFinishedGameweek(bootstrap) ?? 1)
   const stats = computeDigestStats(roster, gameweek)
 
   // Phase 0: hardcoded owner. Comes from `league_users.manager_entry` once auth exists,
   // and differs per co-owner since they sign with their own team.
   const signature = `Thierry — ${standings.league.name} Admin`
+  const defaultBlocks = { overallStandings: true, gwResults: true, prizeStructure: false }
+
+  // Demo mode persists nothing — it exists to test message length, not to write
+  // synthetic rows into the real league's history.
+  let persistence
+  if (!demo) {
+    const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
+    const digest = await upsertDigest(league.id, gameweek, stats)
+    const draft = await findDraft(league.id, gameweek)
+
+    persistence = {
+      leagueId: league.id,
+      digestId: digest.id,
+      messageId: draft?.id,
+      initialBody: draft?.body ?? '',
+      initialBlocks: draft?.blocks ?? defaultBlocks,
+      sentAt: draft?.sentAt?.toISOString(),
+    }
+  }
 
   return (
     <main>
@@ -51,7 +79,8 @@ export default async function SendPage() {
         prize={prizeSummary(gameweekCount(bootstrap))}
         signature={signature}
         leagueName={standings.league.name}
-        defaultBlocks={{ overallStandings: true, gwResults: true, prizeStructure: false }}
+        defaultBlocks={defaultBlocks}
+        persistence={persistence}
       />
     </main>
   )

@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { markSentAction, saveDraftAction } from '@/app/send/actions'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
 import { DEFAULT_BUDGET } from '@/lib/render/budget'
@@ -14,6 +15,15 @@ interface Props {
   signature: string
   defaultBlocks: BlockSelection
   leagueName: string
+  /** Absent in demo mode, where nothing is persisted. */
+  persistence?: {
+    leagueId: string
+    digestId: string
+    messageId?: string
+    initialBody: string
+    initialBlocks: BlockSelection
+    sentAt?: string
+  }
 }
 
 const BLOCK_LABELS: { key: keyof BlockSelection; label: string; hint: string }[] = [
@@ -22,10 +32,24 @@ const BLOCK_LABELS: { key: keyof BlockSelection; label: string; hint: string }[]
   { key: 'prizeStructure', label: 'Prize structure', hint: 'Pot and prize breakdown' },
 ]
 
-export function Composer({ stats, prize, signature, defaultBlocks, leagueName }: Props) {
-  const [body, setBody] = useState('')
-  const [blocks, setBlocks] = useState<BlockSelection>(defaultBlocks)
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+export function Composer({
+  stats,
+  prize,
+  signature,
+  defaultBlocks,
+  leagueName,
+  persistence,
+}: Props) {
+  const [body, setBody] = useState(persistence?.initialBody ?? '')
+  const [blocks, setBlocks] = useState<BlockSelection>(
+    persistence?.initialBlocks ?? defaultBlocks,
+  )
   const [copied, setCopied] = useState(false)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [sentAt, setSentAt] = useState(persistence?.sentAt)
+  const messageIdRef = useRef(persistence?.messageId)
 
   // composeMessage is a pure function, so toggling a block re-renders from the same
   // stored stats — no refetch.
@@ -38,6 +62,36 @@ export function Composer({ stats, prize, signature, defaultBlocks, leagueName }:
   const { used, remaining, overBudget } = composed.budget
   const pct = Math.min(100, (used / DEFAULT_BUDGET) * 100)
 
+  const save = useCallback(async () => {
+    if (!persistence) return
+    setSaveState('saving')
+    try {
+      const result = await saveDraftAction({
+        leagueId: persistence.leagueId,
+        digestId: persistence.digestId,
+        messageId: messageIdRef.current,
+        body,
+        blocks,
+      })
+      messageIdRef.current = result.messageId
+      setSaveState('saved')
+    } catch {
+      setSaveState('error')
+    }
+  }, [persistence, body, blocks])
+
+  // Debounced autosave. The draft is shared between co-owners, so leaving it only in
+  // local state would let two people write the same week's update independently.
+  useEffect(() => {
+    if (!persistence) return
+    // Reference comparison is deliberate: `blocks` is only replaced when the owner
+    // toggles something, so an untouched form skips the initial save.
+    if (body === persistence.initialBody && blocks === persistence.initialBlocks) return
+
+    const timer = setTimeout(save, 800)
+    return () => clearTimeout(timer)
+  }, [body, blocks, persistence, save])
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(composed.text)
@@ -45,6 +99,19 @@ export function Composer({ stats, prize, signature, defaultBlocks, leagueName }:
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setCopied(false)
+    }
+  }
+
+  async function recordSend() {
+    if (!persistence || !messageIdRef.current) return
+    try {
+      const result = await markSentAction({
+        messageId: messageIdRef.current,
+        sentText: composed.text,
+      })
+      setSentAt(result.sentAt)
+    } catch {
+      // Recording is best-effort; the message may well have been sent regardless.
     }
   }
 
@@ -109,7 +176,24 @@ export function Composer({ stats, prize, signature, defaultBlocks, leagueName }:
             Standings trimmed by {composed.truncatedRows} rows to fit.
           </p>
         )}
+        {persistence && (
+          <p className="text-xs text-neutral-500">
+            {saveState === 'saving' && 'Saving…'}
+            {saveState === 'saved' && 'Draft saved — your co-owner sees this too.'}
+            {saveState === 'error' && (
+              <span className="text-red-600">Couldn&apos;t save the draft.</span>
+            )}
+            {saveState === 'idle' && 'Shared draft.'}
+          </p>
+        )}
       </div>
+
+      {sentAt && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          Marked as sent {new Date(sentAt).toLocaleString()}. Sending again will post a
+          second message to the group.
+        </p>
+      )}
 
       <section className="flex flex-col gap-2">
         <span className="text-sm font-medium">Preview</span>
@@ -124,6 +208,7 @@ export function Composer({ stats, prize, signature, defaultBlocks, leagueName }:
               makes the league group unreachable. */}
           <a
             href={links.app}
+            onClick={recordSend}
             className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-center text-base font-medium text-white active:bg-green-700"
           >
             Send to WhatsApp
