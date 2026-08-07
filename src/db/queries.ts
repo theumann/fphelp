@@ -1,10 +1,16 @@
 import { and, desc, eq } from 'drizzle-orm'
 
 import type { DigestStats } from '@/lib/digest/stats'
+import {
+  DEFAULT_SETTINGS,
+  fromPrizeRules,
+  toPrizeRules,
+  type LeagueSettings,
+} from '@/lib/league-settings'
 import type { BlockSelection } from '@/lib/render/blocks'
 
 import { db } from './index'
-import { digests, leagues, leagueUsers, messages, users } from './schema'
+import { digests, leagues, leagueUsers, messages, prizeRules, users } from './schema'
 
 /** Creates the league row on first use, or returns the existing one. */
 export async function ensureLeague(fplLeagueId: number, name: string) {
@@ -104,6 +110,71 @@ export async function markSent(messageId: string, sentText: string, userId?: str
     .returning()
 
   return updated
+}
+
+/** Loads a league's settings, falling back to defaults when it has no rules yet. */
+export async function getSettings(leagueId: string): Promise<LeagueSettings> {
+  const league = await db.query.leagues.findFirst({ where: eq(leagues.id, leagueId) })
+  const rows = await db.query.prizeRules.findMany({
+    where: eq(prizeRules.leagueId, leagueId),
+  })
+
+  return fromPrizeRules(
+    rows.map((r) => ({ kind: r.kind, rank: r.rank, value: r.value })),
+    {
+      potTotal: Number(league?.potTotal ?? 0),
+      currency: league?.currency ?? DEFAULT_SETTINGS.currency,
+      entryFee: league?.entryFee ? Number(league.entryFee) : undefined,
+    },
+  )
+}
+
+/**
+ * Replaces a league's settings.
+ *
+ * Prize rules are rewritten wholesale inside a transaction rather than diffed: the set
+ * must stay coherent (contiguous ranks, percentages totalling 100), and a partial
+ * update that left a stale row behind would silently misallocate the pot.
+ */
+export async function saveSettings(leagueId: string, settings: LeagueSettings) {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(leagues)
+      .set({
+        potTotal: String(settings.potTotal),
+        currency: settings.currency,
+        entryFee: settings.entryFee !== undefined ? String(settings.entryFee) : null,
+      })
+      .where(eq(leagues.id, leagueId))
+
+    await tx.delete(prizeRules).where(eq(prizeRules.leagueId, leagueId))
+    await tx.insert(prizeRules).values(
+      toPrizeRules(settings).map((r) => ({
+        leagueId,
+        kind: r.kind,
+        rank: r.rank,
+        value: r.value,
+      })),
+    )
+  })
+}
+
+/** True once the season's ledger is settled — after which prize rules must not change. */
+export async function isFinalised(leagueId: string): Promise<boolean> {
+  const league = await db.query.leagues.findFirst({ where: eq(leagues.id, leagueId) })
+  return Boolean(league?.finalisedAt)
+}
+
+/** Records the owner's own FPL entry, used to sign the messages they send. */
+export async function setManagerEntry(
+  leagueId: string,
+  userId: string,
+  managerEntry: number | null,
+) {
+  await db
+    .update(leagueUsers)
+    .set({ managerEntry })
+    .where(and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)))
 }
 
 /** Throws unless the user is an owner of the league. Use in every Server Action. */

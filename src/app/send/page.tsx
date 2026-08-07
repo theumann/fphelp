@@ -2,13 +2,14 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { Composer } from '@/components/composer'
-import { ensureLeague, findDraft, ownerSignature, upsertDigest } from '@/db/queries'
+import { ensureLeague, findDraft, getSettings, ownerSignature, upsertDigest } from '@/db/queries'
 import { demoRoster } from '@/lib/demo'
 import { computeDigestStats } from '@/lib/digest/stats'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
 import { gameweekCount, lastFinishedGameweek } from '@/lib/fpl/gameweek'
 import { buildRoster } from '@/lib/fpl/roster'
-import { prizeSummary, REFERENCE_LEAGUE } from '@/lib/league-config'
+import { REFERENCE_LEAGUE } from '@/lib/league-config'
+import { DEFAULT_SETTINGS, summarise } from '@/lib/league-settings'
 
 // Live FPL data — never serve a cached table as this week's result.
 export const dynamic = 'force-dynamic'
@@ -62,11 +63,18 @@ export default async function SendPage({
   // synthetic rows into the real league's history.
   let persistence
   let signature = `${session.user.name ?? session.user.email} — ${standings.league.name} Admin`
+  let prize = summarise(
+    { ...DEFAULT_SETTINGS, potTotal: 0, rankPercentages: [...DEFAULT_SETTINGS.rankPercentages] },
+    gameweekCount(bootstrap),
+  )
 
   if (!demo) {
     const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
     const digest = await upsertDigest(league.id, gameweek, stats)
     const draft = await findDraft(league.id, gameweek)
+
+    // Prizes come from the league's saved settings, not a hardcoded config.
+    prize = summarise(await getSettings(league.id), gameweekCount(bootstrap))
 
     // The signature is per-sender: co-owners have different FPL entries and sign with
     // their own team, so it is built at render time from the signed-in owner's row and
@@ -87,7 +95,7 @@ export default async function SendPage({
     <main>
       <Composer
         stats={stats}
-        prize={prizeSummary(gameweekCount(bootstrap))}
+        prize={prize}
         signature={signature}
         leagueName={standings.league.name}
         defaultBlocks={defaultBlocks}
