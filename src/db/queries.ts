@@ -161,6 +161,24 @@ export async function ownerSignature(
     : `${who} — ${leagueName} Admin`
 }
 
+/**
+ * Undoes a mark-as-sent.
+ *
+ * Necessary because "sent" is the owner's assertion, not an observed fact — so it can
+ * be wrong, and a wrong one is misleading to a co-owner deciding whether to post.
+ * `sentText` is cleared too: it records what the league received, and if nothing was
+ * sent it should record nothing.
+ */
+export async function clearSent(messageId: string) {
+  const [updated] = await db
+    .update(messages)
+    .set({ sentAt: null, sentText: null, markedSentBy: null })
+    .where(eq(messages.id, messageId))
+    .returning()
+
+  return updated
+}
+
 /** Sent history for a league, most recent first. */
 export async function sentMessages(leagueId: string, limit = 10) {
   return db.query.messages.findMany({

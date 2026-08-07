@@ -1,7 +1,7 @@
 'use server'
 
 import { auth } from '@/auth'
-import { assertOwner, markSent, saveDraft } from '@/db/queries'
+import { assertOwner, clearSent, markSent, saveDraft } from '@/db/queries'
 import type { BlockSelection } from '@/lib/render/blocks'
 
 /**
@@ -48,4 +48,13 @@ export async function markSentAction(input: {
 
   const row = await markSent(input.messageId, input.sentText, userId)
   return { sentAt: (row.sentAt ?? new Date()).toISOString() }
+}
+
+/** Undoes a mark-as-sent — it is the owner's assertion, so it can be mistaken. */
+export async function clearSentAction(input: {
+  leagueId: string
+  messageId: string
+}): Promise<void> {
+  await requireOwner(input.leagueId)
+  await clearSent(input.messageId)
 }

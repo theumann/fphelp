@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { markSentAction, saveDraftAction } from '@/app/send/actions'
+import { clearSentAction, markSentAction, saveDraftAction } from '@/app/send/actions'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
 import { DEFAULT_BUDGET } from '@/lib/render/budget'
@@ -49,6 +49,10 @@ export function Composer({
   const [copied, setCopied] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [sentAt, setSentAt] = useState(persistence?.sentAt)
+  // Tapping the link is not evidence that anything was sent — on desktop the
+  // whatsapp:// scheme often has no handler at all. It only means we should now ask.
+  const [tappedSend, setTappedSend] = useState(false)
+  const [marking, setMarking] = useState(false)
   const messageIdRef = useRef(persistence?.messageId)
 
   // composeMessage is a pure function, so toggling a block re-renders from the same
@@ -102,8 +106,13 @@ export function Composer({
     }
   }
 
-  async function recordSend() {
+  /**
+   * Records that the owner says they sent it. Only ever called from an explicit
+   * confirmation — never from tapping the link, which proves nothing.
+   */
+  async function confirmSent() {
     if (!persistence || !messageIdRef.current) return
+    setMarking(true)
     try {
       const result = await markSentAction({
         leagueId: persistence.leagueId,
@@ -112,7 +121,26 @@ export function Composer({
       })
       setSentAt(result.sentAt)
     } catch {
-      // Recording is best-effort; the message may well have been sent regardless.
+      // Best-effort: a failure here doesn't mean the message wasn't sent.
+    } finally {
+      setMarking(false)
+    }
+  }
+
+  async function undoSent() {
+    if (!persistence || !messageIdRef.current) return
+    setMarking(true)
+    try {
+      await clearSentAction({
+        leagueId: persistence.leagueId,
+        messageId: messageIdRef.current,
+      })
+      setSentAt(undefined)
+      setTappedSend(false)
+    } catch {
+      // Leave the banner in place rather than claiming an undo that didn't happen.
+    } finally {
+      setMarking(false)
     }
   }
 
@@ -189,11 +217,43 @@ export function Composer({
         )}
       </div>
 
-      {sentAt && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          Marked as sent {new Date(sentAt).toLocaleString()}. Sending again will post a
-          second message to the group.
-        </p>
+      {sentAt ? (
+        <div className="flex flex-col gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+          <p>
+            You marked this sent on {new Date(sentAt).toLocaleString()}. Sending again
+            will post a second message to the group.
+          </p>
+          <button
+            type="button"
+            onClick={undoSent}
+            disabled={marking}
+            className="self-start text-xs underline disabled:opacity-50"
+          >
+            {marking ? 'Saving…' : "It wasn't actually sent — undo"}
+          </button>
+        </div>
+      ) : (
+        persistence &&
+        tappedSend && (
+          <div className="flex flex-col gap-2 rounded-lg border border-neutral-300 p-3 dark:border-neutral-700">
+            <p className="text-sm">
+              Did the message actually go out? We can&apos;t tell — WhatsApp doesn&apos;t
+              report back.
+            </p>
+            <button
+              type="button"
+              onClick={confirmSent}
+              disabled={marking}
+              className="self-start rounded-lg border border-neutral-400 px-3 py-2 text-sm font-medium disabled:opacity-50 dark:border-neutral-600"
+            >
+              {marking ? 'Saving…' : 'Yes, mark as sent'}
+            </button>
+            <p className="text-xs text-neutral-500">
+              If WhatsApp didn&apos;t open, use Copy and paste it in — then come back and
+              mark it sent.
+            </p>
+          </div>
+        )
       )}
 
       <section className="flex flex-col gap-2">
@@ -209,7 +269,7 @@ export function Composer({
               makes the league group unreachable. */}
           <a
             href={links.app}
-            onClick={recordSend}
+            onClick={() => setTappedSend(true)}
             className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-center text-base font-medium text-white active:bg-green-700"
           >
             Send to WhatsApp
