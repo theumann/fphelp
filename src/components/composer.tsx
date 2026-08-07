@@ -106,6 +106,7 @@ export function Composer({
     if (!persistence || !messageIdRef.current) return
     try {
       const result = await markSentAction({
+        leagueId: persistence.leagueId,
         messageId: messageIdRef.current,
         sentText: composed.text,
       })

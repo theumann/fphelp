@@ -4,7 +4,7 @@ import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection } from '@/lib/render/blocks'
 
 import { db } from './index'
-import { digests, leagues, messages } from './schema'
+import { digests, leagues, leagueUsers, messages, users } from './schema'
 
 /** Creates the league row on first use, or returns the existing one. */
 export async function ensureLeague(fplLeagueId: number, name: string) {
@@ -104,6 +104,61 @@ export async function markSent(messageId: string, sentText: string, userId?: str
     .returning()
 
   return updated
+}
+
+/** Throws unless the user is an owner of the league. Use in every Server Action. */
+export async function assertOwner(leagueId: string, userId: string) {
+  const membership = await db.query.leagueUsers.findFirst({
+    where: and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)),
+  })
+  if (!membership) throw new Error('Not an owner of this league')
+  return membership
+}
+
+/**
+ * Ensures the signed-in user is an owner of this league, creating the link on first
+ * sign-in for the reference league. Returns the membership row.
+ */
+export async function ensureMembership(leagueId: string, userId: string) {
+  const existing = await db.query.leagueUsers.findFirst({
+    where: and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)),
+  })
+  if (existing) return existing
+
+  const [created] = await db
+    .insert(leagueUsers)
+    .values({ leagueId, userId })
+    .onConflictDoNothing()
+    .returning()
+
+  return created ?? existing!
+}
+
+/**
+ * Builds the per-sender signature: "[Name] — [Team Name] Manager and [League] Admin".
+ *
+ * Co-owners sign differently because they have different FPL entries, so this is
+ * resolved at render time from the sending owner's row. It degrades gracefully: an owner
+ * who does not play in the league they administer — plausibly the treasurer — has no
+ * `manager_entry`, and simply signs without a team.
+ */
+export async function ownerSignature(
+  leagueId: string,
+  userId: string,
+  leagueName: string,
+  roster: { entry: number; entryName: string }[],
+): Promise<string> {
+  const membership = await ensureMembership(leagueId, userId)
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
+
+  const who = user?.name ?? user?.email ?? 'Admin'
+  const team = membership?.managerEntry
+    ? roster.find((m) => m.entry === membership.managerEntry)?.entryName
+    : undefined
+
+  return team
+    ? `${who} — ${team} Manager and ${leagueName} Admin`
+    : `${who} — ${leagueName} Admin`
 }
 
 /** Sent history for a league, most recent first. */

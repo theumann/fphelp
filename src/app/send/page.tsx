@@ -1,5 +1,8 @@
+import { redirect } from 'next/navigation'
+
+import { auth } from '@/auth'
 import { Composer } from '@/components/composer'
-import { ensureLeague, findDraft, upsertDigest } from '@/db/queries'
+import { ensureLeague, findDraft, ownerSignature, upsertDigest } from '@/db/queries'
 import { demoRoster } from '@/lib/demo'
 import { computeDigestStats } from '@/lib/digest/stats'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
@@ -16,6 +19,10 @@ export default async function SendPage({
   searchParams: Promise<{ demo?: string }>
 }) {
   const { demo } = await searchParams
+
+  const session = await auth()
+  if (!session?.user?.id) redirect('/signin')
+
   let standings
   let bootstrap
 
@@ -49,18 +56,22 @@ export default async function SendPage({
   const gameweek = demo ? 5 : (lastFinishedGameweek(bootstrap) ?? 1)
   const stats = computeDigestStats(roster, gameweek)
 
-  // Phase 0: hardcoded owner. Comes from `league_users.manager_entry` once auth exists,
-  // and differs per co-owner since they sign with their own team.
-  const signature = `Thierry — ${standings.league.name} Admin`
   const defaultBlocks = { overallStandings: true, gwResults: true, prizeStructure: false }
 
   // Demo mode persists nothing — it exists to test message length, not to write
   // synthetic rows into the real league's history.
   let persistence
+  let signature = `${session.user.name ?? session.user.email} — ${standings.league.name} Admin`
+
   if (!demo) {
     const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
     const digest = await upsertDigest(league.id, gameweek, stats)
     const draft = await findDraft(league.id, gameweek)
+
+    // The signature is per-sender: co-owners have different FPL entries and sign with
+    // their own team, so it is built at render time from the signed-in owner's row and
+    // never baked into the shared digest.
+    signature = await ownerSignature(league.id, session.user.id, standings.league.name, roster)
 
     persistence = {
       leagueId: league.id,
