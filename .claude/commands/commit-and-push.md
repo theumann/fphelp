@@ -6,13 +6,21 @@ Review the staged and unstaged changes, verify them, then commit and push. Follo
 
 This repo uses **npm** on **Windows / PowerShell**. There is no Prettier — ESLint owns code quality and formatting is by convention.
 
-## Step 1 — Branch
+## Step 1 — Branch guard
 
 Run `git branch --show-current`.
 
-This project deliberately commits directly to `main`: it is a solo project with no reviewers, and the deploy pipeline follows `main`. Do **not** stop just because the branch is `main`.
+**If it is `main`, stop and ask before going further.** Say what the change is and offer to move it to a branch. Most often being on `main` means nobody remembered to branch, which is exactly what this check is for.
 
-Do branch first if the change is large or speculative enough that the user might want to abandon it — and say so rather than branching silently.
+Moving uncommitted work to a branch is safe and loses nothing:
+
+```
+git checkout -b <descriptive-name>
+```
+
+Proceed on `main` only if the user says so. Do not decide that for them, and do not branch silently either — they may be mid-test on a working tree they expect to stay put.
+
+This project ran on `main` through the early scaffolding, deliberately. That period is over: from the first fully tested version onward, work belongs on a branch.
 
 ## Step 2 — Code review
 
@@ -74,13 +82,19 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 **PowerShell:** here-strings mangle multi-line messages — braces and quotes break argument parsing and git ends up treating the body as pathspecs. Write the message to a file and use `git commit -F <file>`.
 
-Show the message to the user and confirm before committing.
+**Always show the message and wait for confirmation before committing** — never commit unprompted. The user often has manual testing running in parallel, so they decide when the tree is ready to be captured.
 
 ## Step 10 — Push and deploy
 
-Confirm with the user, then `git push origin main`.
+**Ask before pushing**, separately from the commit confirmation. Then:
 
-Railway does **not** auto-deploy from GitHub — this project deploys via the CLI. If the change should go live, run:
+```
+git push origin <branch>
+```
+
+Railway does **not** auto-deploy from GitHub — this project deploys via the CLI.
+
+**Ask again before deploying.** `railway up` restarts the container, which will interrupt anything the user is testing against the live URL — and a deploy mid-test produces confusing results that look like bugs. Only once they confirm:
 
 ```
 railway up --service fphelp-app --detach
