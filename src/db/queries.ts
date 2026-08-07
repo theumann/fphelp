@@ -10,7 +10,7 @@ import {
 import type { BlockSelection } from '@/lib/render/blocks'
 
 import { db } from './index'
-import { digests, leagues, leagueUsers, messages, prizeRules, users } from './schema'
+import { digests, dues, leagues, leagueUsers, messages, prizeRules, users } from './schema'
 
 /** Creates the league row on first use, or returns the existing one. */
 export async function ensureLeague(fplLeagueId: number, name: string) {
@@ -175,6 +175,28 @@ export async function setManagerEntry(
     .update(leagueUsers)
     .set({ managerEntry })
     .where(and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)))
+}
+
+/**
+ * Who has paid in, keyed by FPL entry.
+ *
+ * A manager with no row has simply never been touched — absence means unpaid, not
+ * missing data, so the caller can render the full roster without seeding rows first.
+ */
+export async function listDues(leagueId: string): Promise<Map<number, boolean>> {
+  const rows = await db.query.dues.findMany({ where: eq(dues.leagueId, leagueId) })
+  return new Map(rows.map((r) => [r.entry, r.paid]))
+}
+
+/** Records whether a manager has paid their dues. */
+export async function setDuePaid(leagueId: string, entry: number, paid: boolean) {
+  await db
+    .insert(dues)
+    .values({ leagueId, entry, paid, paidAt: paid ? new Date() : null })
+    .onConflictDoUpdate({
+      target: [dues.leagueId, dues.entry],
+      set: { paid, paidAt: paid ? new Date() : null },
+    })
 }
 
 /** Throws unless the user is an owner of the league. Use in every Server Action. */

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SETTINGS,
   fromPrizeRules,
+  suggestPercentages,
   summarise,
   toPrizeRules,
   validateSettings,
@@ -76,6 +77,43 @@ describe('validateSettings', () => {
       'fixed-exceeds-pot',
     )
     expect(validateSettings({ ...settings, potTotal: 600 }, 30)).toEqual([])
+  })
+})
+
+describe('suggestPercentages', () => {
+  it('always totals exactly 100', () => {
+    for (let n = 1; n <= 20; n++) {
+      const total = suggestPercentages(n).reduce((a, b) => a + b, 0)
+      expect(total, `for ${n} places`).toBeCloseTo(100, 6)
+    }
+  })
+
+  it('returns one value per place', () => {
+    expect(suggestPercentages(4)).toHaveLength(4)
+    expect(suggestPercentages(12)).toHaveLength(12)
+  })
+
+  it('descends — first place is never worth less than last', () => {
+    for (const n of [3, 6, 9, 15]) {
+      const pcts = suggestPercentages(n)
+      const sorted = [...pcts].sort((a, b) => b - a)
+      expect(pcts).toEqual(sorted)
+    }
+  })
+
+  it('keeps the agreed default for six places', () => {
+    expect(suggestPercentages(6)).toEqual([40, 25, 15, 10, 6, 4])
+  })
+
+  it('produces a valid configuration for any size', () => {
+    for (const n of [1, 3, 7, 11]) {
+      const errors = validateSettings({ ...settings, rankPercentages: suggestPercentages(n) }, 38)
+      expect(errors, `for ${n} places`).toEqual([])
+    }
+  })
+
+  it('returns nothing for zero places', () => {
+    expect(suggestPercentages(0)).toEqual([])
   })
 })
 

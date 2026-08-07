@@ -7,6 +7,7 @@ import { formatCents } from '@/lib/digest/money'
 import { computePot } from '@/lib/digest/prizes'
 import {
   summarise,
+  suggestPercentages,
   toPrizeConfig,
   validateSettings,
   type LeagueSettings,
@@ -23,6 +24,47 @@ interface Props {
   finalised: boolean
 }
 
+/**
+ * The form holds every numeric field as a string.
+ *
+ * Binding a number directly to an input means clearing the box produces `Number('')`,
+ * which is 0 — so the field refills itself with a leading zero the moment you delete
+ * its contents. Strings let a field be genuinely empty while being edited; parsing
+ * happens once, for computation.
+ */
+interface Draft {
+  potTotal: string
+  currency: string
+  entryFee: string
+  gwWinnerAmount: string
+  seasonBestGwAmount: string
+  rankPercentages: string[]
+}
+
+const num = (s: string) => (s.trim() === '' ? 0 : Number(s))
+
+function toDraft(s: LeagueSettings): Draft {
+  return {
+    potTotal: s.potTotal ? String(s.potTotal) : '',
+    currency: s.currency,
+    entryFee: s.entryFee !== undefined ? String(s.entryFee) : '',
+    gwWinnerAmount: String(s.gwWinnerAmount),
+    seasonBestGwAmount: String(s.seasonBestGwAmount),
+    rankPercentages: s.rankPercentages.map(String),
+  }
+}
+
+function toSettings(d: Draft): LeagueSettings {
+  return {
+    potTotal: num(d.potTotal),
+    currency: d.currency,
+    entryFee: d.entryFee.trim() === '' ? undefined : num(d.entryFee),
+    gwWinnerAmount: num(d.gwWinnerAmount),
+    seasonBestGwAmount: num(d.seasonBestGwAmount),
+    rankPercentages: d.rankPercentages.map(num),
+  }
+}
+
 const field =
   'w-full rounded-lg border border-neutral-300 p-2.5 text-base dark:border-neutral-700 dark:bg-neutral-900'
 
@@ -36,11 +78,12 @@ export function SetupForm({
   initialManagerEntry,
   finalised,
 }: Props) {
-  const [settings, setSettings] = useState<LeagueSettings>(initial)
+  const [draft, setDraft] = useState<Draft>(() => toDraft(initial))
   const [managerEntry, setManagerEntry] = useState<number | null>(initialManagerEntry)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; errors: string[] } | null>(null)
 
+  const settings = useMemo(() => toSettings(draft), [draft])
   const errors = useMemo(
     () => validateSettings(settings, gameweekCount, managers.length),
     [settings, gameweekCount, managers.length],
@@ -50,15 +93,19 @@ export function SetupForm({
     [settings, gameweekCount],
   )
   const summary = useMemo(() => summarise(settings, gameweekCount), [settings, gameweekCount])
-  const money = (cents: number) => formatCents(cents, settings.currency)
-
-  function setPct(index: number, value: number) {
-    const next = [...settings.rankPercentages]
-    next[index] = value
-    setSettings({ ...settings, rankPercentages: next })
-  }
+  const money = (cents: number) => formatCents(cents, settings.currency || 'USD')
 
   const pctTotal = settings.rankPercentages.reduce((a, b) => a + b, 0)
+  const feeSuggestion =
+    settings.entryFee !== undefined && settings.entryFee > 0
+      ? settings.entryFee * managers.length
+      : null
+
+  function setPct(index: number, value: string) {
+    const next = [...draft.rankPercentages]
+    next[index] = value
+    setDraft({ ...draft, rankPercentages: next })
+  }
 
   async function submit() {
     setSaving(true)
@@ -94,27 +141,12 @@ export function SetupForm({
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">The pot</h2>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-sm">Total pot</span>
-          <input
-            type="number"
-            step="0.01"
-            value={settings.potTotal}
-            onChange={(e) => setSettings({ ...settings, potTotal: Number(e.target.value) })}
-            className={field}
-          />
-          <span className="text-xs text-neutral-500">
-            Entered directly, not headcount × fee — managers can be missing from standings
-            until a gameweek is scored.
-          </span>
-        </label>
-
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-sm">Currency</span>
             <input
-              value={settings.currency}
-              onChange={(e) => setSettings({ ...settings, currency: e.target.value.toUpperCase() })}
+              value={draft.currency}
+              onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })}
               maxLength={3}
               className={field}
             />
@@ -123,18 +155,40 @@ export function SetupForm({
             <span className="text-sm">Entry fee (optional)</span>
             <input
               type="number"
+              inputMode="decimal"
               step="0.01"
-              value={settings.entryFee ?? ''}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  entryFee: e.target.value === '' ? undefined : Number(e.target.value),
-                })
-              }
+              value={draft.entryFee}
+              onChange={(e) => setDraft({ ...draft, entryFee: e.target.value })}
               className={field}
             />
           </label>
         </div>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-sm">Total pot</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            value={draft.potTotal}
+            onChange={(e) => setDraft({ ...draft, potTotal: e.target.value })}
+            className={field}
+          />
+          <span className="text-xs text-neutral-500">
+            Entered directly rather than derived from the entry fee — some managers may
+            not have paid, and the roster changes as people join.
+          </span>
+          {feeSuggestion !== null && feeSuggestion !== settings.potTotal && (
+            <button
+              type="button"
+              onClick={() => setDraft({ ...draft, potTotal: String(feeSuggestion) })}
+              className="self-start text-xs underline"
+            >
+              Use {managers.length} × {money(Math.round(settings.entryFee! * 100))} ={' '}
+              {money(Math.round(feeSuggestion * 100))}
+            </button>
+          )}
+        </label>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -144,11 +198,10 @@ export function SetupForm({
             <span className="text-sm">Each gameweek winner</span>
             <input
               type="number"
+              inputMode="decimal"
               step="0.01"
-              value={settings.gwWinnerAmount}
-              onChange={(e) =>
-                setSettings({ ...settings, gwWinnerAmount: Number(e.target.value) })
-              }
+              value={draft.gwWinnerAmount}
+              onChange={(e) => setDraft({ ...draft, gwWinnerAmount: e.target.value })}
               className={field}
             />
           </label>
@@ -156,11 +209,10 @@ export function SetupForm({
             <span className="text-sm">Best gameweek of season</span>
             <input
               type="number"
+              inputMode="decimal"
               step="0.01"
-              value={settings.seasonBestGwAmount}
-              onChange={(e) =>
-                setSettings({ ...settings, seasonBestGwAmount: Number(e.target.value) })
-              }
+              value={draft.seasonBestGwAmount}
+              onChange={(e) => setDraft({ ...draft, seasonBestGwAmount: e.target.value })}
               className={field}
             />
           </label>
@@ -195,25 +247,31 @@ export function SetupForm({
           </span>
         </div>
 
-        {settings.rankPercentages.map((pct, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <span className="w-10 text-sm text-neutral-500">{i + 1}.</span>
-            <input
-              type="number"
-              step="0.01"
-              value={pct}
-              onChange={(e) => setPct(i, Number(e.target.value))}
-              className={`${field} flex-1`}
-            />
+        {draft.rankPercentages.map((pct, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-6 text-sm text-neutral-500">{i + 1}.</span>
+            <div className="relative flex-1">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={pct}
+                onChange={(e) => setPct(i, e.target.value)}
+                className={`${field} pr-7`}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-500">
+                %
+              </span>
+            </div>
             <span className="w-24 text-right text-sm tabular-nums">
               {money(summary.rankPrizeCents[i] ?? 0)}
             </span>
             <button
               type="button"
               onClick={() =>
-                setSettings({
-                  ...settings,
-                  rankPercentages: settings.rankPercentages.filter((_, j) => j !== i),
+                setDraft({
+                  ...draft,
+                  rankPercentages: draft.rankPercentages.filter((_, j) => j !== i),
                 })
               }
               className="text-sm text-neutral-500 underline"
@@ -223,15 +281,30 @@ export function SetupForm({
           </div>
         ))}
 
-        <button
-          type="button"
-          onClick={() =>
-            setSettings({ ...settings, rankPercentages: [...settings.rankPercentages, 0] })
-          }
-          className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
-        >
-          Add a place
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setDraft({ ...draft, rankPercentages: [...draft.rankPercentages, ''] })
+            }
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+          >
+            Add a place
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setDraft({
+                ...draft,
+                rankPercentages: suggestPercentages(draft.rankPercentages.length).map(String),
+              })
+            }
+            disabled={draft.rankPercentages.length === 0}
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
+          >
+            Suggest percentages
+          </button>
+        </div>
       </section>
 
       <section className="flex flex-col gap-2">

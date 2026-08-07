@@ -69,6 +69,45 @@ export function fromPrizeRules(
   }
 }
 
+/**
+ * Curated splits for common numbers of paid places. Each totals exactly 100.
+ *
+ * Hand-picked rather than generated: these are the shapes leagues actually use, and a
+ * formula produces defensible-looking but odd numbers (20.4%, 13.7%) that owners then
+ * have to tidy by hand.
+ */
+const CURATED_SPLITS: Record<number, number[]> = {
+  1: [100],
+  2: [65, 35],
+  3: [50, 30, 20],
+  4: [45, 27, 18, 10],
+  5: [42, 26, 16, 10, 6],
+  6: [40, 25, 15, 10, 6, 4],
+  7: [38, 24, 15, 9, 6, 5, 3],
+  8: [36, 23, 14, 9, 6, 5, 4, 3],
+}
+
+/**
+ * A sensible descending split for N paid places, totalling exactly 100.
+ *
+ * Beyond the curated sizes it decays geometrically, with the remainder folded into last
+ * place so the total is exact rather than 99.97.
+ */
+export function suggestPercentages(places: number): number[] {
+  if (places <= 0) return []
+  if (CURATED_SPLITS[places]) return [...CURATED_SPLITS[places]]
+
+  const weights = Array.from({ length: places }, (_, i) => 0.68 ** i)
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+
+  // Work in hundredths of a percent so the total can be made exact.
+  const bp = weights.map((w) => Math.round((w / totalWeight) * 10_000))
+  const drift = 10_000 - bp.reduce((a, b) => a + b, 0)
+  bp[bp.length - 1] += drift
+
+  return bp.map((v) => Math.round(v) / 100)
+}
+
 export function toPrizeConfig(settings: LeagueSettings, gameweekCount: number): PrizeConfig {
   return {
     potTotal: settings.potTotal,
