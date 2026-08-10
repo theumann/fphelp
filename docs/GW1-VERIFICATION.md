@@ -8,18 +8,22 @@ Reference league: **9999999** ("The Sunday League"). Last checked 2026-08-05: 0 
 
 ## 1. ⚠️ Is manager history actually backfillable?
 
-**This is the one that can change the plan, so do it first.**
+**No longer plan-changing — the capture job was built without waiting for the answer.**
 
-ROADMAP Phase 1 says history capture must start at GW1 because it "cannot be backfilled". That claim looks too strong and was never verified.
+The check could never have run in time: pre-season `current[]` is empty for everyone, so it is indistinguishable from "backfill doesn't work", and the earliest real answer arrives *after* the moment capture would have had to be running. The decision was therefore made under uncertainty, on the asymmetry — if backfill works the job was cheap insurance, if it doesn't the data would have been gone for good.
 
-Check: fetch `entry/{id}/history` for a manager and inspect `current[]`.
+`POST /api/jobs/capture-history` stores **every** gameweek `current[]` returns, so this question now only decides how much a single run recovers.
 
-- **If `current[]` returns the whole season to date** — backfill works for any manager currently in the league. Capturing from GW1 stops being an ordering constraint on Phase 1 and becomes a nice-to-have. **Relax the roadmap accordingly.**
-- **If it only returns recent gameweeks** — the original claim stands, and history capture is genuinely urgent.
+Still worth observing on the first post-GW1 run:
 
-Either way, these remain unrecoverable and should stay documented as such:
-- a manager who **leaves** the league (their entry ID vanishes from standings)
-- league-relative facts about **who was a member at the time**
+- **If `current[]` returns the whole season to date** — a missed run costs nothing; the next one backfills it. Running the job becomes routine rather than time-critical.
+- **If it only returns recent gameweeks** — the job must run every gameweek without fail, which makes wiring the Railway cron urgent rather than optional.
+
+Either way, one thing stays unrecoverable and should remain documented as such:
+
+- a manager who **leaves** the league — their entry ID vanishes from standings, so nothing after that point can reconstruct them.
+
+The second historical gap is now partly covered: the capture job upserts `managers`, so **who was a member at the time** is recorded from the first run onward. It is only as complete as the runs behind it.
 
 ## 2. Confirm the unverified endpoint shapes
 

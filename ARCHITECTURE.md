@@ -269,6 +269,19 @@ Two further traps in that table:
                                                   └─> owner taps ──> (optional) sent_at
 ```
 
+## History capture
+
+`POST /api/jobs/capture-history` snapshots `entry/{id}/history` → `current[]` for every manager, and upserts `managers` from the same standings fetch.
+
+- **Bearer-token guarded** on `JOBS_TOKEN`, and **fails closed**: an unset variable rejects every request rather than leaving the endpoint open. Production must have it set or the job cannot run at all.
+- **Sequential, one manager at a time.** Not a performance oversight — 18 parallel requests from a shared Railway egress IP is the traffic shape most likely to attract the Cloudflare block described above.
+- **A block aborts the run**; anything already collected is saved first, and the response says how much. Other per-manager errors are collected and reported without losing the rest.
+- **Stores every gameweek `current[]` returns**, so a skipped run backfills on the next one.
+- **Rows are upserted on `(league_id, entry, gameweek)`**, so a gameweek captured before bonus points landed is corrected by a later run rather than duplicated.
+- **Malformed gameweeks are dropped, never defaulted.** A missing `points` stored as `0` is indistinguishable from a real zero; the response lists what was dropped so the loss is visible.
+
+Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky. Nothing schedules it yet — see ROADMAP.
+
 **Where the gate actually runs today.** The diagram shows polling driving the gate, but the cron isn't built yet — so `isGameweekReady` is enforced **on render of `/send`**, before any stats are computed or any `digests` row is written. An unready gameweek blocks the composer outright rather than warning, because once the owner taps through to WhatsApp a wrong table is unrecoverable.
 
 Two states bypass it deliberately: `?demo=` (synthetic data, exists to test the length budget) and **pre-season**, where no gameweek has finished at all — nobody has scored, so there are no stale numbers to render and the score-less roster is the correct output. When the cron lands it should call the same function; the gate belongs in both places, not moved from one to the other.
