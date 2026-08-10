@@ -22,6 +22,8 @@ Proceed on `main` only if the user says so. Do not decide that for them, and do 
 
 This project ran on `main` through the early scaffolding, deliberately. That period is over: from the first fully tested version onward, work belongs on a branch.
 
+The guard now has teeth beyond tidiness — **`main` auto-deploys** (Step 11), so a push from `main` goes straight to production with no further confirmation. Say that when asking.
+
 ## Step 2 — Code review
 
 Run `git diff HEAD` and review for:
@@ -84,7 +86,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 **Always show the message and wait for confirmation before committing** — never commit unprompted. The user often has manual testing running in parallel, so they decide when the tree is ready to be captured.
 
-## Step 10 — Push and deploy
+## Step 10 — Push
 
 **Ask before pushing**, separately from the commit confirmation. Then:
 
@@ -92,18 +94,32 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 git push origin <branch>
 ```
 
-Railway does **not** auto-deploy from GitHub — this project deploys via the CLI.
+Pushing a feature branch is safe: it deploys nothing. Stop here unless the user wants the change live.
 
-**Ask again before deploying.** `railway up` restarts the container, which will interrupt anything the user is testing against the live URL — and a deploy mid-test produces confusing results that look like bugs. Only once they confirm:
+## Step 11 — Merge to main, which deploys
 
-```
-railway up --service fphelp-app --detach
-```
+Railway is connected to the GitHub repo and **auto-deploys on every push to `main`**. There is no separate deploy step — merging *is* deploying, and the two cannot be decided independently.
 
-The pre-deploy command runs migrations and the owner bootstrap, so a schema change reaches production on deploy. Verify afterwards rather than assuming:
+**Ask before merging**, and ask it as a deploy question rather than a git question. The container restarts, which interrupts anything the user is testing against the live URL, and a deploy mid-test produces confusing results that look like bugs. Only once they confirm:
 
 ```
+git checkout main
+git merge --ff-only <branch>
+git push origin main
+```
+
+Prefer `--ff-only`. If it refuses, `main` has moved and the branch needs rebasing — say so rather than reaching for a merge commit unasked.
+
+Then return to the working branch, or delete it if the user is done with it.
+
+The pre-deploy command runs migrations and the owner bootstrap, so a schema change reaches production on deploy. Verify afterwards rather than assuming — and note the build starts within seconds of the push, but takes a minute or two to go live:
+
+```
+railway deployment list
 railway logs --service fphelp-app
 ```
 
-Note that **new Railway environment variables need a redeploy** to reach a running container — a missing value looks like a bad value.
+Two things that still need the CLI, because no commit is involved:
+
+- **New environment variables need a redeploy** to reach a running container — a missing value looks like a bad value. Use `railway redeploy --service fphelp-app`.
+- **Redeploying an unchanged tree** — same command.
