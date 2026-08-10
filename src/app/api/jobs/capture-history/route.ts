@@ -1,7 +1,9 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import { ensureLeague, saveHistory, upsertManagers } from '@/db/queries'
+import { capturedEntryCount, ensureLeague, saveHistory, upsertManagers } from '@/db/queries'
+import { captureDecision } from '@/lib/fpl/capture'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
+import { lastFinishedGameweek } from '@/lib/fpl/gameweek'
 import { droppedGameweeks, historyRows, type HistoryRow } from '@/lib/fpl/history'
 import { buildRoster } from '@/lib/fpl/roster'
 import { REFERENCE_LEAGUE } from '@/lib/league-config'
@@ -11,10 +13,15 @@ export const dynamic = 'force-dynamic'
 /**
  * Snapshots every manager's gameweek history.
  *
- * Not wired to a scheduler yet — this is the endpoint a Railway cron will call, and
- * until then it is triggered by hand. Kept out of the page render deliberately: it
- * makes one FPL call per manager, which has no business adding seconds to a page load
- * or breaking the composer when the API is flaky.
+ * Called by the Railway cron service (`scripts/capture-history.mts`) every 30-60
+ * minutes, and safe to call by hand. Most runs do nothing but refresh the roster: the
+ * per-manager history calls are gated on `captureDecision`, so the expensive work
+ * happens roughly once a week, when a gameweek actually finishes and settles.
+ *
+ * Kept out of the page render deliberately: one FPL call per manager has no business
+ * adding seconds to a page load or breaking the composer when the API is flaky.
+ *
+ * `POST ?force=1` re-captures a gameweek already stored — for backfills.
  */
 
 function authorised(req: Request): boolean {
@@ -45,7 +52,40 @@ export async function POST(req: Request) {
 
   const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
   const roster = buildRoster(standings)
+  // Always kept fresh, even on a skipped poll: new_entries appear between gameweeks and
+  // the roster costs nothing beyond the standings call already made.
   await upsertManagers(league.id, roster)
+
+  let bootstrap, status
+  try {
+    // Sequential, like the loop below: same Cloudflare-shaped egress concern.
+    bootstrap = await fpl.bootstrapStatic()
+    status = await fpl.eventStatus()
+  } catch (err) {
+    return Response.json({ error: describe(err) }, { status: 502 })
+  }
+
+  const candidate = lastFinishedGameweek(bootstrap)
+  const captured = candidate === null ? 0 : await capturedEntryCount(league.id, candidate)
+
+  const decision = captureDecision({
+    bootstrap,
+    status,
+    rosterSize: roster.length,
+    capturedEntries: () => captured,
+    force: new URL(req.url).searchParams.get('force') === '1',
+  })
+
+  if (!decision.capture) {
+    // 200, not an error: a poll with nothing to do is the normal outcome.
+    return Response.json({
+      league: standings.league.name,
+      managers: roster.length,
+      skipped: true,
+      reason: decision.reason,
+      gameweek: decision.gameweek,
+    })
+  }
 
   const rows: HistoryRow[] = []
   const failed: { entry: number; error: string }[] = []
@@ -82,6 +122,7 @@ export async function POST(req: Request) {
   return Response.json({
     league: standings.league.name,
     managers: roster.length,
+    gameweek: decision.gameweek,
     rowsSaved: saved,
     gameweeksSeen: [...new Set(rows.map((r) => r.gameweek))].sort((a, b) => a - b),
     /** Non-empty means data was skipped rather than stored wrong — worth investigating. */

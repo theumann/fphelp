@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:bootstrap": "node --import tsx scripts/bootstrap-owner.mts"
+    "db:bootstrap": "node --import tsx scripts/bootstrap-owner.mts",
+    "job:capture": "node --import tsx scripts/capture-history.mts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

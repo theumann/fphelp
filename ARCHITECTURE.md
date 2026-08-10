@@ -280,11 +280,17 @@ Two further traps in that table:
 - **Rows are upserted on `(league_id, entry, gameweek)`**, so a gameweek captured before bonus points landed is corrected by a later run rather than duplicated.
 - **Malformed gameweeks are dropped, never defaulted.** A missing `points` stored as `0` is indistinguishable from a real zero; the response lists what was dropped so the loss is visible.
 
-Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky. Nothing schedules it yet — see ROADMAP.
+Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky.
 
-**Where the gate actually runs today.** The diagram shows polling driving the gate, but the cron isn't built yet — so `isGameweekReady` is enforced **on render of `/send`**, before any stats are computed or any `digests` row is written. An unready gameweek blocks the composer outright rather than warning, because once the owner taps through to WhatsApp a wrong table is unrecoverable.
+**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Suggested schedule `*/40 * * * *`; the exact cadence doesn't matter because most runs are no-ops.
 
-Two states bypass it deliberately: `?demo=` (synthetic data, exists to test the length budget) and **pre-season**, where no gameweek has finished at all — nobody has scored, so there are no stale numbers to render and the score-less roster is the correct output. When the cron lands it should call the same function; the gate belongs in both places, not moved from one to the other.
+**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~150 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
+
+Completeness is measured as *distinct entries stored for that gameweek* against the roster size, not a "captured" flag. A run that lost two managers to a flaky API is therefore retried by the next poll automatically. A departed manager keeps their rows, so the comparison is `>=` — otherwise a shrinking roster would stall the poll into re-capturing forever.
+
+**Where the gate runs.** In both places, deliberately: the cron calls `isGameweekReady` via `captureDecision` before capturing, and `/send` enforces it again on render, before any stats are computed or any `digests` row is written. An unready gameweek blocks the composer outright rather than warning, because once the owner taps through to WhatsApp a wrong table is unrecoverable.
+
+Two states bypass the render-time gate deliberately: `?demo=` (synthetic data, exists to test the length budget) and **pre-season**, where no gameweek has finished at all — nobody has scored, so there are no stale numbers to render and the score-less roster is the correct output.
 
 ## Deep-link construction
 
