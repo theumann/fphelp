@@ -269,6 +269,10 @@ Two further traps in that table:
                                                   └─> owner taps ──> (optional) sent_at
 ```
 
+**Where the gate actually runs today.** The diagram shows polling driving the gate, but the cron isn't built yet — so `isGameweekReady` is enforced **on render of `/send`**, before any stats are computed or any `digests` row is written. An unready gameweek blocks the composer outright rather than warning, because once the owner taps through to WhatsApp a wrong table is unrecoverable.
+
+Two states bypass it deliberately: `?demo=` (synthetic data, exists to test the length budget) and **pre-season**, where no gameweek has finished at all — nobody has scored, so there are no stale numbers to render and the score-less roster is the correct output. When the cron lands it should call the same function; the gate belongs in both places, not moved from one to the other.
+
 ## Deep-link construction
 
 ```
