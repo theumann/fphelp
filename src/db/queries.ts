@@ -1,6 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 
 import type { DigestStats } from '@/lib/digest/stats'
+import type { HistoryRow } from '@/lib/fpl/history'
+import type { RosterManager } from '@/lib/fpl/roster'
 import {
   DEFAULT_SETTINGS,
   fromPrizeRules,
@@ -10,7 +12,17 @@ import {
 import type { BlockSelection } from '@/lib/render/blocks'
 
 import { db } from './index'
-import { digests, dues, leagues, leagueUsers, messages, prizeRules, users } from './schema'
+import {
+  digests,
+  dues,
+  leagues,
+  leagueUsers,
+  managerGwHistory,
+  managers,
+  messages,
+  prizeRules,
+  users,
+} from './schema'
 
 /** Creates the league row on first use, or returns the existing one. */
 export async function ensureLeague(fplLeagueId: number, name: string) {
@@ -21,6 +33,73 @@ export async function ensureLeague(fplLeagueId: number, name: string) {
 
   const [created] = await db.insert(leagues).values({ fplLeagueId, name }).returning()
   return created
+}
+
+/**
+ * Records who is in the league right now.
+ *
+ * This is the only record of league membership at a point in time. The FPL API only
+ * ever reports the *current* members, so once someone leaves they vanish from
+ * standings and their history rows would otherwise be orphaned integers with no name
+ * attached. Managers are marked inactive rather than deleted for the same reason.
+ *
+ * Name and team name are refreshed on every run, since managers rename their teams
+ * mid-season and the latest value is the one worth showing.
+ */
+export async function upsertManagers(leagueId: string, roster: RosterManager[]) {
+  if (roster.length === 0) return 0
+
+  await db
+    .insert(managers)
+    .values(
+      roster.map((m) => ({
+        leagueId,
+        entry: m.entry,
+        entryName: m.entryName,
+        playerName: m.playerName,
+        joinedTime: m.joinedTime ? new Date(m.joinedTime) : null,
+        active: true,
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [managers.leagueId, managers.entry],
+      set: {
+        entryName: sql`excluded.entry_name`,
+        playerName: sql`excluded.player_name`,
+        active: true,
+      },
+    })
+
+  return roster.length
+}
+
+/**
+ * Stores gameweek history, overwriting any existing row for the same gameweek.
+ *
+ * Keyed on (league_id, entry, gameweek), so re-running is harmless — which is what
+ * makes the job safe to call repeatedly and safe to retry after a partial failure.
+ * Overwriting rather than ignoring matters because a gameweek captured before bonus
+ * points landed must be correctable by a later run.
+ */
+export async function saveHistory(leagueId: string, rows: HistoryRow[]) {
+  if (rows.length === 0) return 0
+
+  await db
+    .insert(managerGwHistory)
+    .values(rows.map((r) => ({ leagueId, ...r })))
+    .onConflictDoUpdate({
+      target: [managerGwHistory.leagueId, managerGwHistory.entry, managerGwHistory.gameweek],
+      set: {
+        points: sql`excluded.points`,
+        totalPoints: sql`excluded.total_points`,
+        rank: sql`excluded.rank`,
+        overallRank: sql`excluded.overall_rank`,
+        pointsOnBench: sql`excluded.points_on_bench`,
+        eventTransfersCost: sql`excluded.event_transfers_cost`,
+      },
+    })
+
+  return rows.length
 }
 
 /**

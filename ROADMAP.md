@@ -82,7 +82,10 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
 - **Email digest** — same composed message, HTML. **Opt-in**, and requires the owner to enter a recipient list first (see Delivery model). Deferrable within Phase 1 if WhatsApp lands first
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
-  - ⚠️ **Verify the urgency on 21 Aug** — item 1 of [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md). The "cannot be backfilled" claim looks too strong, and if backfill works this stops being an ordering constraint on Phase 1.
+  - ✅ **Built** as `POST /api/jobs/capture-history`, guarded by a `JOBS_TOKEN` bearer token. It also upserts `managers`, which is the only record of who was in the league at a given time.
+  - It stores **every gameweek `current[]` returns**, not just the latest. That makes a missed run self-healing, and means the backfill question below decides only how much one run recovers — not whether the data is lost.
+  - ⏳ **Not scheduled.** Nothing calls it automatically; it is triggered by hand until a Railway cron exists. Until then, running it after each gameweek is a manual step.
+  - ⚠️ **Unexercised against real data** — pre-season `current[]` is empty for every manager, so the mapping is unit-tested but has never parsed a real scored gameweek. Re-check on the first run after GW1.
 
 ### Phase 2 — money pot, dues and winnings
 - Owner enters the **pot total directly**, plus prize rules, configured once at setup
