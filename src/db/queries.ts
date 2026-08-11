@@ -103,6 +103,22 @@ export async function saveHistory(leagueId: string, rows: HistoryRow[]) {
 }
 
 /**
+ * How many distinct managers have a stored row for this gameweek.
+ *
+ * The capture job compares this against the roster size to decide whether a poll has
+ * anything left to do. Counting entries rather than storing a "captured" flag means a
+ * run that lost a manager to a flaky API is retried by the next poll for free.
+ */
+export async function capturedEntryCount(leagueId: string, gameweek: number): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(distinct ${managerGwHistory.entry})::int` })
+    .from(managerGwHistory)
+    .where(and(eq(managerGwHistory.leagueId, leagueId), eq(managerGwHistory.gameweek, gameweek)))
+
+  return row?.count ?? 0
+}
+
+/**
  * Stores the computed stats for a gameweek, or updates them if already present.
  *
  * `digests` is unique on (league_id, gameweek), which is what stops a cron poll and a
