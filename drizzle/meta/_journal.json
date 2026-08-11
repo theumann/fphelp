@@ -15,6 +15,13 @@
       "when": 1786115895607,
       "tag": "0001_wakeful_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786483492557,
+      "tag": "0002_volatile_toad_men",
+      "breakpoints": true
     }
   ]
 }
