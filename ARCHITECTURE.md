@@ -282,7 +282,16 @@ Two further traps in that table:
 
 Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky.
 
-**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Suggested schedule `*/40 * * * *`; the exact cadence doesn't matter because most runs are no-ops.
+**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Schedule `*/40 * * * *` (UTC); the exact cadence doesn't matter much because most runs are no-ops, but see [GW1-VERIFICATION §7](docs/GW1-VERIFICATION.md) — it was inherited from this document rather than measured.
+
+**Cron service configuration**, since it lives in the Railway dashboard rather than the repo. A service separate from the web app, same GitHub repo, no public domain, with:
+
+- **Build command `npm ci`.** Load-bearing. Railpack otherwise detects Next.js and runs `next build`, whose page-data collection imports every route module — including this one, which reaches `src/db/index.ts` where the pool is created at module scope. The build then fails on a missing `DATABASE_URL`, with an error that points at the route rather than at the build command that shouldn't have run.
+- **Start command `npm run job:capture`.** Without it Railpack starts `next start`, which never exits, and Railway skips any cron firing whose previous run is still going — so the job would run exactly once, ever.
+- **`DATABASE_URL`**, even though the script never touches Postgres. `railway.json` sets `preDeployCommand` repo-wide, so this service runs the migrations too; both steps are idempotent. The tidier alternative — moving the pre-deploy command out of committed config and into per-service dashboard state — was rejected as a worse trade.
+- **`APP_URL` and `JOBS_TOKEN`.** `APP_URL` may omit the scheme: Railway's own `RAILWAY_PUBLIC_DOMAIN` is a bare hostname, which `fetch` rejects outright, so the script assumes https when none is given.
+
+**Known coupling:** `DATABASE_URL` is a *build-time* requirement for the app, not just a runtime one — the eager pool above plus `DrizzleAdapter(db, …)` at module scope in `src/auth.ts`. It doesn't affect the web service, which has the variable, but it will break any CI build or fresh environment without a database attached. Making it genuinely lazy needs the NextAuth setup restructured; a `Proxy` over `db` alone is not enough, because the adapter inspects the object on import.
 
 **What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~150 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
 

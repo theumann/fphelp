@@ -17,7 +17,7 @@ The check could never have run in time: pre-season `current[]` is empty for ever
 Still worth observing on the first post-GW1 run:
 
 - **If `current[]` returns the whole season to date** — a missed run costs nothing; the next one backfills it. Running the job becomes routine rather than time-critical.
-- **If it only returns recent gameweeks** — the job must run every gameweek without fail, which makes wiring the Railway cron urgent rather than optional.
+- **If it only returns recent gameweeks** — the job must run every gameweek without fail, and the cron's reliability stops being a convenience. See §7.
 
 Either way, one thing stays unrecoverable and should remain documented as such:
 
@@ -59,3 +59,21 @@ The most interesting moment in the whole season for this app, and it only happen
   - [x] ~~**Selecting a _group_ from the picker.**~~ **Confirmed 2026-08-06** — message delivered to a real WhatsApp group. The delivery model is settled: no phone number in the URL, picker appears, group selectable, text intact.
   - [ ] **Still to confirm: a full ~1,500 character digest** on a real device. Pre-season messages are short because nobody has scored. Use `/send?demo=1` (or `?demo=30` for a league large enough to truncate).
 - [x] ~~**Confirm Railway's egress reaches the FPL API.**~~ **Done 2026-08-05** — all four endpoints returned 200/JSON from the deployed container (egress IP `13.56.136.98`). Single sample; see ARCHITECTURE.md for why the proxy mitigation stays on the books.
+
+## 7. Capture job — the first run that actually captures
+
+The scheduler shipped 2026-08-10 (Railway cron, every 40 min). Everything below GW1 is only the **skip** path: pre-season `captureDecision` returns `pre-season` before any per-manager call, so the branch that does the real work has never run against real data.
+
+- [ ] **The capture branch itself.** Confirm the first post-GW1 run returns `skipped: false` with `rowsSaved > 0`, and that `gameweeksSeen` contains GW1.
+- [ ] **`dropped` and `failed` are empty.** Non-empty `dropped` means `history.current[]` fields didn't match §2 and rows were discarded rather than stored wrong — that is the check firing, not failing, but it needs investigating the same day.
+- [ ] **The gate held.** The capture should happen *after* bonus points settle, not when `finished` first flips. If history lands with pre-bonus scores, `isGameweekReady` is wrong and the composer inherits the same bug.
+- [ ] **`already-captured` engages.** Every poll for the rest of that week should skip with that reason. If it re-captures hourly, the entry-count comparison in `captureDecision` isn't matching the roster.
+- [ ] **18 sequential FPL calls survive Cloudflare.** The egress check (§6) was four calls; this is the first burst. A `blocked: true` response with `savedBeforeBlock` is the signal.
+
+### Revisit the cadence — and check what a scheduled run costs
+
+`*/40 * * * *` was inherited from ARCHITECTURE.md's "every 30-60 min", not measured against anything.
+
+- [ ] **Time a *scheduled* run** (not a manual trigger — that's a full redeploy: `npm ci` plus the pre-deploy migration, ~5 min, and not representative). A scheduled firing should start the existing image and exit in seconds. If it's minutes, 36 runs/day is ~90 compute-hours a month instead of ~5-8, and the cadence needs cutting immediately.
+- [ ] **Narrow the window.** Gameweeks settle Sunday evening through Tuesday. Once the real settling time is known, `*/40 * * * 0-2` cuts polls ~60% at no cost to capture latency — the self-healing backfill covers anything unusual.
+- [ ] **Reconsider the roster fetch.** Standings are fetched *before* the gate, so a skipped poll costs three FPL calls rather than two. That's deliberate — it keeps `new_entries` fresh pre-season, exactly when the gate always skips. After GW1 that rationale expires, and moving the fetch after the decision drops a third of the traffic.
