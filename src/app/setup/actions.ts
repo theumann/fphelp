@@ -3,7 +3,16 @@
 import { revalidatePath } from 'next/cache'
 
 import { auth } from '@/auth'
-import { assertOwner, isFinalised, saveSettings, setManagerEntry } from '@/db/queries'
+import {
+  addRecipients,
+  assertOwner,
+  isFinalised,
+  removeRecipient,
+  saveSettings,
+  setEmailEnabled,
+  setManagerEntry,
+} from '@/db/queries'
+import { parseRecipientList } from '@/lib/email/recipients'
 import { validateSettings, type LeagueSettings } from '@/lib/league-settings'
 
 export interface SaveSettingsResult {
@@ -49,6 +58,59 @@ export async function saveSettingsAction(input: {
   revalidatePath('/send')
   revalidatePath('/setup')
   return { ok: true, errors: [] }
+}
+
+export interface AddRecipientsResult {
+  ok: boolean
+  added: number
+  /** Already on the list — reported so a re-paste is visibly a no-op, not a failure. */
+  skipped: number
+  /** Entries that could not be parsed, verbatim. */
+  invalid: string[]
+}
+
+/**
+ * Adds pasted addresses to the league's email list.
+ *
+ * Reports what happened to every entry rather than a bare success: the owner maintains
+ * this list by hand against a roster the API won't give them, so "14 pasted, 12 added"
+ * is the only way they would notice two were malformed.
+ */
+export async function addRecipientsAction(input: {
+  leagueId: string
+  raw: string
+}): Promise<AddRecipientsResult> {
+  const session = await auth()
+  if (!session?.user?.id) return { ok: false, added: 0, skipped: 0, invalid: [] }
+  await assertOwner(input.leagueId, session.user.id)
+
+  const { valid, invalid, duplicates } = parseRecipientList(input.raw)
+  const { added, skipped } = await addRecipients(input.leagueId, valid)
+
+  revalidatePath('/setup')
+  // Duplicates within the paste and addresses already stored are the same thing to the
+  // owner: an address they meant to add that is now present exactly once.
+  return { ok: true, added, skipped: skipped + duplicates.length, invalid }
+}
+
+export async function removeRecipientAction(input: { leagueId: string; id: string }) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('Not signed in')
+  await assertOwner(input.leagueId, session.user.id)
+
+  await removeRecipient(input.leagueId, input.id)
+  revalidatePath('/setup')
+}
+
+/** Email is opt-in per league; a WhatsApp-only league never maintains a list. */
+export async function setEmailEnabledAction(input: { leagueId: string; enabled: boolean }) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('Not signed in')
+  await assertOwner(input.leagueId, session.user.id)
+
+  await setEmailEnabled(input.leagueId, input.enabled)
+  revalidatePath('/setup')
+  revalidatePath('/send')
 }
 
 function describe(error: ReturnType<typeof validateSettings>[number]): string {

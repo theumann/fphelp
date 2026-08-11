@@ -1,8 +1,15 @@
 import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
+import { RecipientsList } from '@/components/recipients-list'
 import { SetupForm } from '@/components/setup-form'
-import { ensureLeague, ensureMembership, getSettings, isFinalised } from '@/db/queries'
+import {
+  ensureLeague,
+  ensureMembership,
+  getSettings,
+  isFinalised,
+  listRecipients,
+} from '@/db/queries'
 import { fpl } from '@/lib/fpl/client'
 import { gameweekCount } from '@/lib/fpl/gameweek'
 import { buildRoster } from '@/lib/fpl/roster'
@@ -41,6 +48,15 @@ export default async function SetupPage() {
         initialManagerEntry={membership?.managerEntry ?? null}
         finalised={await isFinalised(league.id)}
       />
+
+      <div className="mx-auto w-full max-w-xl p-6 pt-0">
+        <RecipientsList
+          leagueId={league.id}
+          initialRecipients={await listRecipients(league.id)}
+          initialEmailEnabled={league.emailEnabled}
+          managerCount={roster.length}
+        />
+      </div>
     </main>
   )
 }

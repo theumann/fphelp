@@ -21,6 +21,7 @@ import {
   managers,
   messages,
   prizeRules,
+  recipients,
   users,
 } from './schema'
 
@@ -292,6 +293,52 @@ export async function setDuePaid(leagueId: string, entry: number, paid: boolean)
       target: [dues.leagueId, dues.entry],
       set: { paid, paidAt: paid ? new Date() : null },
     })
+}
+
+/** The league's email list, ordered so the UI is stable across reloads. */
+export async function listRecipients(leagueId: string) {
+  return db.query.recipients.findMany({
+    where: eq(recipients.leagueId, leagueId),
+    orderBy: (r, { asc }) => [asc(r.email)],
+  })
+}
+
+export interface AddRecipientsResult {
+  added: number
+  /** Addresses already on the list. Reported, not treated as an error. */
+  skipped: number
+}
+
+/**
+ * Adds parsed recipients, ignoring any already present.
+ *
+ * `onConflictDoNothing` rather than an upsert: re-pasting the same list is the normal
+ * way an owner adds two new members, and it must not overwrite names they have since
+ * corrected by hand.
+ */
+export async function addRecipients(
+  leagueId: string,
+  entries: { email: string; name: string | null }[],
+): Promise<AddRecipientsResult> {
+  if (entries.length === 0) return { added: 0, skipped: 0 }
+
+  const inserted = await db
+    .insert(recipients)
+    .values(entries.map((e) => ({ leagueId, email: e.email, name: e.name })))
+    .onConflictDoNothing({ target: [recipients.leagueId, recipients.email] })
+    .returning({ id: recipients.id })
+
+  return { added: inserted.length, skipped: entries.length - inserted.length }
+}
+
+/** Scoped by league as well as id, so an id from another league cannot be deleted. */
+export async function removeRecipient(leagueId: string, id: string) {
+  await db.delete(recipients).where(and(eq(recipients.leagueId, leagueId), eq(recipients.id, id)))
+}
+
+/** Email is opt-in per league: a WhatsApp-only league never touches the recipient list. */
+export async function setEmailEnabled(leagueId: string, enabled: boolean) {
+  await db.update(leagues).set({ emailEnabled: enabled }).where(eq(leagues.id, leagueId))
 }
 
 /** Throws unless the user is an owner of the league. Use in every Server Action. */

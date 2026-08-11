@@ -143,15 +143,27 @@ export const managers = pgTable(
   (t) => [unique('managers_league_entry_key').on(t.leagueId, t.entry)],
 )
 
-/** Owner-maintained email list. Separate from `managers` — the FPL API gives no addresses. */
-export const recipients = pgTable('recipients', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  leagueId: uuid('league_id')
-    .notNull()
-    .references(() => leagues.id, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
-  name: text('name'),
-})
+/**
+ * Owner-maintained email list. Separate from `managers` — the FPL API gives no
+ * addresses, and the two lists drift as people join and leave.
+ *
+ * Unique per league on `email`, which is stored already lower-cased: the same address
+ * added twice is not an error the owner would notice, and the consequence is a member
+ * receiving every digest twice.
+ */
+export const recipients = pgTable(
+  'recipients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    leagueId: uuid('league_id')
+      .notNull()
+      .references(() => leagues.id, { onDelete: 'cascade' }),
+    /** Normalised to lower case on write; the unique constraint depends on it. */
+    email: text('email').notNull(),
+    name: text('name'),
+  },
+  (t) => [unique('recipients_league_email_key').on(t.leagueId, t.email)],
+)
 
 /** One row per manager per gameweek, from entry/{id}/history -> current[]. */
 export const managerGwHistory = pgTable(

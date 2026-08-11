@@ -1,0 +1,1 @@
+ALTER TABLE "recipients" ADD CONSTRAINT "recipients_league_email_key" UNIQUE("league_id","email");
