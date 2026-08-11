@@ -8,7 +8,8 @@
  *
  *   node --env-file=.env --import tsx scripts/capture-history.mts [--force]
  *
- * Env: APP_URL (e.g. https://fphelp.up.railway.app), JOBS_TOKEN.
+ * Env: APP_URL (scheme optional — a bare `xyz.up.railway.app` is assumed https),
+ * JOBS_TOKEN.
  */
 const appUrl = process.env.APP_URL
 const token = process.env.JOBS_TOKEN
@@ -19,7 +20,17 @@ if (!appUrl || !token) {
 }
 
 const force = process.argv.includes('--force')
-const url = `${appUrl.replace(/\/$/, '')}/api/jobs/capture-history${force ? '?force=1' : ''}`
+
+/**
+ * Railway's own `RAILWAY_PUBLIC_DOMAIN` is a bare hostname with no scheme, so APP_URL
+ * is very easily set to something `fetch` rejects outright. Defaulting to https rather
+ * than demanding a scheme keeps that from being a deploy-time failure.
+ */
+const base = /^https?:\/\//.test(appUrl) ? appUrl : `https://${appUrl}`
+const url = new URL(
+  `/api/jobs/capture-history${force ? '?force=1' : ''}`,
+  base.replace(/\/$/, ''),
+)
 
 const res = await fetch(url, {
   method: 'POST',
