@@ -60,6 +60,14 @@ The most interesting moment in the whole season for this app, and it only happen
   - [ ] **Still to confirm: a full ~1,500 character digest** on a real device. Pre-season messages are short because nobody has scored. Use `/send?demo=1` (or `?demo=30` for a league large enough to truncate).
 - [x] ~~**Confirm Railway's egress reaches the FPL API.**~~ **Done 2026-08-05** — all four endpoints returned 200/JSON from the deployed container (egress IP `13.56.136.98`). Single sample; see ARCHITECTURE.md for why the proxy mitigation stays on the books.
 
+## 6b. Clear pre-season test artifacts — before 21 Aug
+
+The league (9999999) is the real one, so its `managers`, `dues` and settings are real data and must be kept. What is *not* real is what pre-season testing wrote against **gameweek 1**:
+
+- [ ] **Delete any GW1 draft in `messages`.** `/send` pre-season labels its digest gameweek 1 (there is no finished gameweek, so it falls back to 1). A draft saved while testing will be loaded by `findDraft` into the real GW1 composer — pre-season text, silently, at the one moment it matters.
+- [ ] **The GW1 `digests` row is self-healing** — `upsertDigest` overwrites the stats when GW1 actually scores — but confirm rather than assume, since a score-less digest looks plausible.
+- [ ] **Check for a `sent` message on GW1.** If one exists from testing, the composer's sent/draft state for the real GW1 starts wrong.
+
 ## 7. Capture job — the first run that actually captures
 
 The scheduler shipped 2026-08-10 (Railway cron, every 40 min). Everything below GW1 is only the **skip** path: pre-season `captureDecision` returns `pre-season` before any per-manager call, so the branch that does the real work has never run against real data.
