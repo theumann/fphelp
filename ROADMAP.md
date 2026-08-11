@@ -63,7 +63,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - ✅ **Done 2026-08-03** for `bootstrap-static/` (fully confirmed) and the response envelopes of `event-status/`, `leagues-classic/{id}/standings/`, `entry/{id}/history`
 - ⏳ **Blocked until GW1 completes (deadline 2026-08-21)** — `standings.results[]` and `history.current[]` element fields, and the live value of `event-status.leagues`, are all empty pre-season. **See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md)** for the full checklist to run then
 - One throwaway `whatsapp://send?text=` link with a realistic full-length digest, tapped on the owner's real phone, to confirm group selection works and nothing is truncated
-- One league hardcoded; no setup UI yet
+- One league per deployment, set by `FPL_LEAGUE_ID` (defaults to the reference league, 9999999). Not yet a setting: `/setup` configures the pot, prize rules and the owner's own team *for* that league, but there is no flow for creating one, so which league a deployment serves stays deployment-level. A bad value throws at startup rather than falling back — serving the wrong league silently is worse than not starting
 
 ### Phase 1 — standings digest + deep-link send
 - **League setup (one-time)** — owner enters the **numeric** league ID; validate via `leagues-classic/{id}/standings/`. Note the invite code (e.g. `1xrliv`) is *not* the API ID and cannot be resolved to one without authentication — the UI must ask for the number from the league URL and say so
