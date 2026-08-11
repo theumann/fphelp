@@ -111,6 +111,22 @@ Reference league config (this league): $100 entry × 18+ managers, $15 per gamew
 ### Phase 4 — season narrative stats
 - Manager of the month, worst GW ever, longest streak — pure queries over the history captured since Phase 1
 
+### Phase 5 — other people's leagues (multi-tenancy)
+
+Deliberately after GW1. The first real scored gameweek is a one-time, unrepeatable verification event (see [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md)); destabilising auth and bootstrap in that window trades a verifiable season for a feature nobody is waiting on yet.
+
+**What already supports it.** Every table that matters is league-scoped — `digests`, `dues`, `prize_rules`, `managers`, `manager_gw_history`, `recipients`, `league_users` all carry `league_id` — and `assertOwner(leagueId, userId)` guards every Server Action. Isolation is enforced at the write path today. This is not a schema rewrite.
+
+**What blocks it**, in the order it should be fixed:
+
+- **`ensureMembership` auto-adds.** Any signed-in user visiting `/setup` or `/dues` is *made* an owner of the league. With one hand-curated allowlist that is a convenience; with many leagues it is an authorisation hole — the first stranger to sign in joins someone else's league. Must become an explicit invite. **This is worth fixing even if multi-tenancy never ships**, because it is the one item that is latent today rather than merely missing.
+- **No self-signup, by design.** `src/auth.ts` refuses any address not already in `users`. Unrelated owners cannot be added by hand, so this becomes signup plus per-league invites. Note what that costs: the allowlist currently rejects strangers *before* any email is sent, so the app cannot be used as a mail relay. Removing it means adding rate limiting to replace that property.
+- **One league per deployment.** `FPL_LEAGUE_ID` becomes the wrong shape. League selection moves into the database and the UI, with a create-league flow that validates a numeric ID against `leagues-classic/{id}/standings/` — and says plainly that the invite code is not the ID.
+- **The capture job is single-league.** It reads one league and makes 18 sequential FPL calls. Multi-league makes that a loop, and ~180 calls per window at ten leagues, from one Railway egress IP, behind Cloudflare. The egress-proxy mitigation currently "on the books" becomes real work, and the poll gate stops being an optimisation and starts being what keeps the app unblocked.
+- **No league switcher**, since there has never been more than one.
+
+**Non-technical, and easy to defer past the point where it is cheap:** hosting other people's leagues makes this a data controller for members' names and teams, and it sends them email. Negligible at five leagues; not at five hundred.
+
 ## Trigger condition
 
 `events[].finished` flips **before** bonus points are applied, and league tables are recalculated on a schedule separate from player points. Triggering on `finished` + `data_checked` alone can send a digest with stale standings.
@@ -133,7 +149,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 - **Season rollover** resets league and gameweek IDs
 
 ### Explicitly out of MVP
-- Multi-league support (co-*owners* are in; one owner across many *leagues* is not)
+- Multi-league support (co-*owners* are in; one owner across many *leagues* is not). Now planned as **Phase 5** rather than indefinitely deferred — unrelated owners running their own leagues is a committed direction, just not before GW1
 - Member-facing polls/predictions
 - H2H leagues (classic only for v1)
 - Public shareable web page
@@ -150,7 +166,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 - **Role-based permissions** — `role` is stored from v1 (`communicator`, `treasurer`) but grants nothing; every owner can do everything. The obvious first restriction is preventing the treasurer from sending to the group
 - **WhatsApp Business Cloud API delivery** — fully server-side sending, gated on Official Business Account status
 - **Variable/uneven entry fees or side-pots** — beyond the flat-fee assumption (e.g. optional side bets, buy-ins mid-season)
-- **Multi-league support** — one owner running several leagues/seasons from one dashboard. The MVP's `league_users` join table already allows this; the deferred work is the league switcher and scoping every query, not a schema change
+- **One owner, several leagues/seasons from one dashboard** — the league *switcher*, distinct from Phase 5's multi-tenancy. Phase 5 makes unrelated owners possible; this makes one person's several leagues pleasant. Same join table, and mostly UI once Phase 5 lands
 - **H2H (head-to-head) league support** — different standings model than classic
 - **Member-facing features** — personal weekly recap, H2H trash-talk stats, predictions/polls embedded in digest, public read-only standings page
 - **Public shareable web page** per league (no login, just a link)
