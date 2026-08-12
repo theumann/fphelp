@@ -2,7 +2,14 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { Composer } from '@/components/composer'
-import { ensureLeague, findDraft, getSettings, ownerSignature, upsertDigest } from '@/db/queries'
+import {
+  ensureLeague,
+  findDraft,
+  getSettings,
+  listRecipients,
+  ownerSignature,
+  upsertDigest,
+} from '@/db/queries'
 import { demoRoster } from '@/lib/demo'
 import { computeDigestStats } from '@/lib/digest/stats'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
@@ -128,6 +135,9 @@ export default async function SendPage({
   // Demo mode persists nothing — it exists to test message length, not to write
   // synthetic rows into the real league's history.
   let persistence
+  // Demo mode never gets the email panel: there is no league row to read the opt-in
+  // from, and no recipient list that a synthetic roster could correspond to.
+  let email
   let signature = `${session.user.name ?? session.user.email} — ${standings.league.name} Admin`
   let prize = summarise(
     { ...DEFAULT_SETTINGS, potTotal: 0, rankPercentages: [...DEFAULT_SETTINGS.rankPercentages] },
@@ -147,6 +157,13 @@ export default async function SendPage({
     // never baked into the shared digest.
     signature = await ownerSignature(league.id, session.user.id, standings.league.name, roster)
 
+    // Counted even when the list is empty — the panel says so, rather than hiding and
+    // leaving the owner to wonder why email vanished.
+    email = {
+      enabled: league.emailEnabled,
+      recipientCount: (await listRecipients(league.id)).length,
+    }
+
     persistence = {
       leagueId: league.id,
       digestId: digest.id,
@@ -165,6 +182,7 @@ export default async function SendPage({
         signature={signature}
         leagueName={standings.league.name}
         defaultBlocks={defaultBlocks}
+        email={email}
         persistence={persistence}
       />
     </main>

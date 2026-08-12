@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { clearSentAction, markSentAction, saveDraftAction } from '@/app/send/actions'
+import { EmailPanel } from '@/components/email-panel'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
 import { DEFAULT_BUDGET } from '@/lib/render/budget'
@@ -15,6 +16,8 @@ interface Props {
   signature: string
   defaultBlocks: BlockSelection
   leagueName: string
+  /** Absent in demo mode. `enabled` is the league's opt-in — email is off by default. */
+  email?: { enabled: boolean; recipientCount: number }
   /** Absent in demo mode, where nothing is persisted. */
   persistence?: {
     leagueId: string
@@ -40,6 +43,7 @@ export function Composer({
   signature,
   defaultBlocks,
   leagueName,
+  email,
   persistence,
 }: Props) {
   const [body, setBody] = useState(persistence?.initialBody ?? '')
@@ -256,8 +260,20 @@ export function Composer({
         )
       )}
 
+      {email?.enabled && (
+        <EmailPanel
+          body={body}
+          stats={stats}
+          prize={prize}
+          signature={signature}
+          leagueName={leagueName}
+          defaultBlocks={defaultBlocks}
+          recipientCount={email.recipientCount}
+        />
+      )}
+
       <section className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Preview</span>
+        <span className="text-sm font-medium">WhatsApp preview</span>
         <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-neutral-100 p-3 text-sm dark:bg-neutral-900">
           {composed.text || 'Nothing to send yet.'}
         </pre>
