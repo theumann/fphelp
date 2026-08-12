@@ -99,8 +99,10 @@ export async function sendEmailAction(input: {
   const userId = await requireOwner(input.leagueId)
 
   const league = await getLeague(input.leagueId)
-  if (!league) return { ok: false, error: 'League not found.' }
-  if (!league.emailEnabled) return { ok: false, error: 'Email is turned off for this league.' }
+  if (!league) return { ok: false, error: 'That league couldn’t be found.' }
+  if (!league.emailEnabled) {
+    return { ok: false, error: 'Email is switched off for this league — turn it on in Setup.' }
+  }
 
   const existing = await findDelivery(input.leagueId, input.gameweek, 'email')
   // A previous failure delivered nothing, so it must not stand in the way of a retry.
@@ -109,12 +111,11 @@ export async function sendEmailAction(input: {
   }
 
   const digest = await findDigest(input.leagueId, input.gameweek)
-  if (!digest) return { ok: false, error: 'No digest prepared for this gameweek yet.' }
+  if (!digest) {
+    return { ok: false, error: 'This gameweek hasn’t been prepared yet — reload the page.' }
+  }
 
   const to = (await listRecipients(input.leagueId)).map((r) => r.email)
-  if (to.length === 0) {
-    return { ok: false, error: 'No recipients yet — add addresses in Setup.' }
-  }
 
   const prize = summarise(
     await getSettings(input.leagueId),
@@ -147,11 +148,21 @@ export async function sendEmailAction(input: {
     status: result.ok ? 'sent' : 'failed',
     providerId: result.ok ? result.providerId : null,
     recipientCount: to.length,
-    error: result.ok ? null : result.error,
+    // The provider's own words, not the sentence the owner saw — a `deliveries` row
+    // reading "try again shortly" is useless when working out what went wrong.
+    error: result.ok ? null : result.detail,
     sentBy: userId,
   })
 
-  if (!result.ok) return { ok: false, error: result.error }
+  if (!result.ok) {
+    // The owner gets the readable sentence; the log gets the provider's words. Without
+    // this the detail exists only in the deliveries row, and a failed send looks silent
+    // in the server output — which is exactly where anyone debugging looks first.
+    console.error(
+      `[email] GW${input.gameweek} league=${input.leagueId} to=${to.length}: ${result.detail}`,
+    )
+    return { ok: false, error: result.error }
+  }
 
   // Only now is the send a fact. Recording the text is what makes it auditable later —
   // the owner edits the prose, so it isn't reproducible from the API.

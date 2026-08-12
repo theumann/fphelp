@@ -106,9 +106,13 @@ export function EmailPanel({
       } else {
         setError(result.error)
       }
-    } catch (err) {
-      // Never fall through to a success state: the owner would believe it went out.
-      setError(err instanceof Error ? err.message : 'The send failed.')
+    } catch {
+      // A thrown action means the request itself didn't complete, so we genuinely don't
+      // know whether the email went out. Say so — never fall through to a success
+      // state, and never claim it failed either.
+      setError(
+        'The connection dropped, so we can’t tell whether this was sent. Check your inbox before trying again.',
+      )
     } finally {
       setSending(false)
     }

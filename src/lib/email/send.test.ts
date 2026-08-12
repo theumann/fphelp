@@ -47,7 +47,7 @@ describe('sendEmail', () => {
     expect((bodyOf(2).bcc as string[]).length).toBe(20)
   })
 
-  it('reports which batch failed, since the earlier ones went out', async () => {
+  it('warns that earlier batches already arrived, so a retry duplicates them', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(ok())
@@ -58,7 +58,21 @@ describe('sendEmail', () => {
     const result = await sendEmail({ ...base, to })
 
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('batch 2 of 2')
+    if (!result.ok) {
+      expect(result.error).toContain('first 50 recipients did already receive it')
+      // The cause sentence must not also assert the opposite. A message saying both
+      // "nothing was sent" and "50 already got it" leaves the owner unable to decide
+      // whether to retry, which is the only question it exists to answer.
+      expect(result.error).not.toContain('Nothing was sent')
+    }
+  })
+
+  it('does not claim anything arrived when the very first batch fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response('nope', { status: 500 })) as never
+    const result = await sendEmail({ ...base, to: ['a@example.com'] })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('Nothing was sent')
   })
 
   it('fails rather than reporting a send with no key configured', async () => {
@@ -73,11 +87,42 @@ describe('sendEmail', () => {
     expect((await sendEmail({ ...base, to: [] })).ok).toBe(false)
   })
 
-  it('surfaces a network error instead of throwing', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('ECONNRESET')) as never
-    const result = await sendEmail({ ...base, to: ['a@example.com'] })
+  /** The message the owner reads must not name a variable only an operator can set. */
+  describe('what the owner is shown', () => {
+    it('does not leak env var names', async () => {
+      delete process.env.AUTH_RESEND_KEY
+      const result = await sendEmail({ ...base, to: ['a@example.com'] })
 
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('ECONNRESET')
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).not.toContain('AUTH_RESEND_KEY')
+        // …while the diagnosable detail is still recorded for the deliveries row.
+        expect(result.detail).toContain('AUTH_RESEND_KEY')
+      }
+    })
+
+    it('does not leak the provider response body', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response('{"message":"domain not verified"}', { status: 403 })) as never
+      const result = await sendEmail({ ...base, to: ['a@example.com'] })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).not.toContain('domain not verified')
+        expect(result.detail).toContain('domain not verified')
+      }
+    })
+
+    it('keeps the network error in detail, not in the message', async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error('ECONNRESET')) as never
+      const result = await sendEmail({ ...base, to: ['a@example.com'] })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).not.toContain('ECONNRESET')
+        expect(result.detail).toContain('ECONNRESET')
+      }
+    })
   })
 })

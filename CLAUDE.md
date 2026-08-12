@@ -55,4 +55,8 @@ These are the traps that produce silently wrong output rather than errors:
 - **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
 - **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress. Cloudflare is a constraint we're subject to, not a vendor we use — Railway is the only host.
+- **Email recipients go in `bcc`, never `to`.** Fourteen addresses in `to` publishes all fourteen to all fourteen, and it cannot be undone once sent. `to` carries the sender alone.
+- **`AUTH_EMAIL_FROM` has no fallback for digests**, unlike sign-in mail which falls back to `onboarding@resend.dev`. A digest arriving from a stranger's address, to members who never signed up, is worse than not sending — so it fails instead.
+- **The email is re-rendered server-side from the stored digest**, never sent from HTML the browser supplies. A Server Action is a public endpoint; accepting markup would mean mailing the league something we never saw, with `renderEmail`'s escaping bypassed.
+- **A send failure has two audiences.** `error` is the owner's sentence, `detail` is the provider's words for the `deliveries` row and the log. Never let a cause sentence assert scope ("nothing was sent") — a later batch failing makes it a lie, and the owner resends to people who already have it.
 - **Email needs a recipient list; WhatsApp doesn't.** The API gives no addresses, so `recipients` is owner-maintained and drifts from `managers`. Email is opt-in per league.
