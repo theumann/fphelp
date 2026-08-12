@@ -19,7 +19,7 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
 | Auth | Magic link (Auth.js) | Single owner; the emailed link must open the mobile send page directly |
 | Hosting | Railway (persistent container) | Stable egress IP — see "Egress and Cloudflare". Not Vercel serverless |
 | Scheduling | Railway cron → token-protected route | Survives restarts; no in-process timer state |
-| Email delivery | Resend + React Email | One template renders the HTML email **and** the plaintext WhatsApp payload |
+| Email delivery | Resend, called with `fetch` | No SDK and no React Email: `renderEmail` builds the HTML and its plaintext alternative from `DigestStats` |
 | WhatsApp delivery | Deep link (`whatsapp://send?text=`) | Owner taps; no phone number in the URL |
 | Unit tests | Vitest + recorded API fixtures | The API is unofficial and shifts between seasons |
 | UI tests | Playwright | Owner flows, especially deep-link construction |
@@ -264,10 +264,18 @@ Two further traps in that table:
                   AND events[gw].data_checked
                       │
                       v
-                  compute ──> digests row ──> deliveries: prepared
+                  compute ──> digests row ──> composer
                                                   │
-                                                  └─> owner taps ──> (optional) sent_at
+                    WhatsApp ──> owner taps ──────┤──> (optional) sent_at
+                                                  │      (null = unknown, not failed)
+                    Email ──> owner clicks Send ──┘──> deliveries: sent | failed
 ```
+
+The two channels are asymmetric on purpose. WhatsApp leaves the app entirely, so a
+send is only ever the owner's assertion. Email goes out from the server, so the
+provider tells us whether it was accepted — `deliveries` records `sent` or `failed`
+per `(league_id, gameweek, kind)`, and a `failed` row means nothing arrived and a
+retry is safe.
 
 ## History capture
 

@@ -13,6 +13,7 @@ import type { BlockSelection } from '@/lib/render/blocks'
 
 import { db } from './index'
 import {
+  deliveries,
   digests,
   dues,
   leagues,
@@ -133,6 +134,78 @@ export async function upsertDigest(leagueId: string, gameweek: number, stats: Di
     .onConflictDoUpdate({
       target: [digests.leagueId, digests.gameweek],
       set: { stats, preparedAt: new Date() },
+    })
+    .returning()
+
+  return row
+}
+
+export async function getLeague(leagueId: string) {
+  return db.query.leagues.findFirst({ where: eq(leagues.id, leagueId) })
+}
+
+/** The digest row for a gameweek, whose `stats` the email is re-rendered from server-side. */
+export async function findDigest(leagueId: string, gameweek: number) {
+  return db.query.digests.findFirst({
+    where: and(eq(digests.leagueId, leagueId), eq(digests.gameweek, gameweek)),
+  })
+}
+
+/** What the league has already had delivered this gameweek, per channel. */
+export async function findDelivery(leagueId: string, gameweek: number, kind: 'whatsapp' | 'email') {
+  return db.query.deliveries.findFirst({
+    where: and(
+      eq(deliveries.leagueId, leagueId),
+      eq(deliveries.gameweek, gameweek),
+      eq(deliveries.kind, kind),
+    ),
+  })
+}
+
+/**
+ * Records the outcome of a delivery attempt, successful or not.
+ *
+ * Upsert rather than insert: the unique key is what stops a double-click sending twice,
+ * so a deliberate resend has to update the existing row. `attempts` accumulates, and a
+ * previous failure is cleared only by the attempt that overwrites it — a row must never
+ * read `sent` while still carrying the error from a different attempt.
+ */
+export async function recordDelivery(input: {
+  leagueId: string
+  gameweek: number
+  kind: 'whatsapp' | 'email'
+  messageId?: string
+  status: 'sent' | 'failed'
+  providerId?: string | null
+  recipientCount: number
+  error?: string | null
+  sentBy?: string
+}) {
+  const [row] = await db
+    .insert(deliveries)
+    .values({
+      leagueId: input.leagueId,
+      gameweek: input.gameweek,
+      kind: input.kind,
+      messageId: input.messageId,
+      status: input.status,
+      providerId: input.providerId ?? null,
+      recipientCount: input.recipientCount,
+      error: input.error ?? null,
+      sentBy: input.sentBy,
+    })
+    .onConflictDoUpdate({
+      target: [deliveries.leagueId, deliveries.gameweek, deliveries.kind],
+      set: {
+        messageId: input.messageId,
+        status: input.status,
+        providerId: input.providerId ?? null,
+        recipientCount: input.recipientCount,
+        error: input.error ?? null,
+        attempts: sql`${deliveries.attempts} + 1`,
+        sentBy: input.sentBy,
+        updatedAt: new Date(),
+      },
     })
     .returning()
 

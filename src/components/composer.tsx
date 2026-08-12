@@ -17,7 +17,7 @@ interface Props {
   defaultBlocks: BlockSelection
   leagueName: string
   /** Absent in demo mode. `enabled` is the league's opt-in — email is off by default. */
-  email?: { enabled: boolean; recipientCount: number }
+  email?: { enabled: boolean; recipientCount: number; gameweekCount: number; sentAt?: string }
   /** Absent in demo mode, where nothing is persisted. */
   persistence?: {
     leagueId: string
@@ -269,6 +269,18 @@ export function Composer({
           leagueName={leagueName}
           defaultBlocks={defaultBlocks}
           recipientCount={email.recipientCount}
+          send={
+            persistence && {
+              leagueId: persistence.leagueId,
+              gameweek: stats.gameweek,
+              // A getter, not the value: the draft autosaves after this renders, so
+              // reading it here would capture the id from before the first save —
+              // which is `undefined`, and the send would mark nothing.
+              getMessageId: () => messageIdRef.current,
+              gameweekCount: email.gameweekCount,
+              sentAt: email.sentAt,
+            }
+          }
         />
       )}
 

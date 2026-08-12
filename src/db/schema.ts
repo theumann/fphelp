@@ -30,6 +30,12 @@ export const winningStatus = pgEnum('winning_status', ['provisional', 'final'])
 
 export const messageChannel = pgEnum('message_channel', ['whatsapp', 'email'])
 
+/**
+ * `failed` is a real outcome we can observe, unlike WhatsApp: the provider either
+ * accepted the email or refused it, and it says which.
+ */
+export const deliveryStatus = pgEnum('delivery_status', ['sent', 'failed'])
+
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
@@ -274,3 +280,41 @@ export const messages = pgTable('messages', {
   sentAt: timestamp('sent_at', { withTimezone: true }),
   markedSentBy: uuid('marked_sent_by').references(() => users.id, { onDelete: 'set null' }),
 })
+
+/**
+ * One row per league per gameweek per channel — the guard against sending the same
+ * digest twice.
+ *
+ * Unique on `(league_id, gameweek, kind)` deliberately, even though `messages` is
+ * deliberately many-per-gameweek. The two model different things: a follow-up message
+ * is a legitimate second post the owner wrote, while a second *delivery* of the same
+ * gameweek's digest is almost always a double-click or a cron run racing a manual send.
+ * The owner can still resend on purpose — `attempts` counts it and the row is updated
+ * rather than inserted — but it takes an explicit confirmation, which a race cannot give.
+ *
+ * A `failed` row does not block a retry: it records that nothing arrived.
+ */
+export const deliveries = pgTable(
+  'deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    leagueId: uuid('league_id')
+      .notNull()
+      .references(() => leagues.id, { onDelete: 'cascade' }),
+    gameweek: integer('gameweek').notNull(),
+    kind: messageChannel('kind').notNull(),
+    messageId: uuid('message_id').references(() => messages.id, { onDelete: 'set null' }),
+    status: deliveryStatus('status').notNull(),
+    /** The provider's ID for the send, so a bounce can be traced back to this row. */
+    providerId: text('provider_id'),
+    /** How many addresses it went to, recorded at send time — the list drifts. */
+    recipientCount: integer('recipient_count').notNull().default(0),
+    /** The provider's refusal, verbatim. Null when it succeeded. */
+    error: text('error'),
+    attempts: integer('attempts').notNull().default(1),
+    sentBy: uuid('sent_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique('deliveries_league_gameweek_kind_key').on(t.leagueId, t.gameweek, t.kind)],
+)

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
+import { sendEmailAction } from '@/app/send/actions'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
 import { renderEmail } from '@/lib/render/email'
@@ -15,6 +16,16 @@ interface Props {
   leagueName: string
   defaultBlocks: BlockSelection
   recipientCount: number
+  /** Absent in demo mode; without it the panel is preview-only and cannot send. */
+  send?: {
+    leagueId: string
+    gameweek: number
+    /** Read at click time — the draft autosaves, so the id doesn't exist at first render. */
+    getMessageId: () => string | undefined
+    gameweekCount: number
+    /** A prior delivery for this gameweek, so the state survives a reload. */
+    sentAt?: string
+  }
 }
 
 const LABELS: { key: keyof BlockSelection; label: string }[] = [
@@ -40,6 +51,7 @@ export function EmailPanel({
   leagueName,
   defaultBlocks,
   recipientCount,
+  send,
 }: Props) {
   // Standings default ON here, whatever WhatsApp's default is: the reason to leave the
   // table out is the budget, and email doesn't have one.
@@ -48,6 +60,12 @@ export function EmailPanel({
     overallStandings: true,
   })
   const [showHtml, setShowHtml] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [sentAt, setSentAt] = useState(send?.sentAt)
+  const [error, setError] = useState<string | null>(null)
+  // Set when the server reports this gameweek already went out. The resend is a second,
+  // separate click — a double-submit can't produce one.
+  const [confirmResend, setConfirmResend] = useState(false)
 
   const email = useMemo(
     () =>
@@ -62,6 +80,43 @@ export function EmailPanel({
       }),
     [leagueName, stats, body, blocks, prize, signature],
   )
+
+  async function dispatch(resend: boolean) {
+    if (!send) return
+    setSending(true)
+    setError(null)
+    try {
+      const result = await sendEmailAction({
+        leagueId: send.leagueId,
+        gameweek: send.gameweek,
+        messageId: send.getMessageId(),
+        body,
+        blocks,
+        signature,
+        gameweekCount: send.gameweekCount,
+        confirmResend: resend,
+      })
+
+      if (result.ok) {
+        setSentAt(result.sentAt)
+        setConfirmResend(false)
+      } else if (result.alreadySent) {
+        setSentAt(result.sentAt)
+        setConfirmResend(true)
+      } else {
+        setError(result.error)
+      }
+    } catch {
+      // A thrown action means the request itself didn't complete, so we genuinely don't
+      // know whether the email went out. Say so — never fall through to a success
+      // state, and never claim it failed either.
+      setError(
+        'The connection dropped, so we can’t tell whether this was sent. Check your inbox before trying again.',
+      )
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
@@ -130,9 +185,64 @@ export function EmailPanel({
         )}
       </div>
 
-      <p className="text-xs text-neutral-500">
-        Sending isn&apos;t wired up yet — this is the preview only.
-      </p>
+      {send ? (
+        <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          {sentAt && (
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+              Emailed on {new Date(sentAt).toLocaleString()}.
+            </p>
+          )}
+
+          {error && (
+            <p className="rounded-lg bg-red-50 p-2 text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
+              Not sent — {error}
+            </p>
+          )}
+
+          {confirmResend ? (
+            <>
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                This gameweek has already been emailed. Sending again delivers a second
+                copy to all {recipientCount}.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => dispatch(true)}
+                  disabled={sending}
+                  className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {sending ? 'Sending…' : 'Send it again anyway'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmResend(false)}
+                  disabled={sending}
+                  className="rounded-lg border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50 dark:border-neutral-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => dispatch(false)}
+              disabled={sending || recipientCount === 0}
+              className="self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {sending ? 'Sending…' : `Send email to ${recipientCount}`}
+            </button>
+          )}
+
+          <p className="text-xs text-neutral-500">
+            Unlike WhatsApp, this sends from here — check the preview first. Addresses are
+            bcc&apos;d, so nobody sees the list.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-neutral-500">Preview only — demo mode doesn&apos;t send.</p>
+      )}
     </section>
   )
 }

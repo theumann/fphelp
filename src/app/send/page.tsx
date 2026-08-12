@@ -4,6 +4,7 @@ import { auth } from '@/auth'
 import { Composer } from '@/components/composer'
 import {
   ensureLeague,
+  findDelivery,
   findDraft,
   getSettings,
   listRecipients,
@@ -159,9 +160,18 @@ export default async function SendPage({
 
     // Counted even when the list is empty — the panel says so, rather than hiding and
     // leaving the owner to wonder why email vanished.
+    const [recipientList, delivered] = await Promise.all([
+      listRecipients(league.id),
+      findDelivery(league.id, gameweek, 'email'),
+    ])
+
     email = {
       enabled: league.emailEnabled,
-      recipientCount: (await listRecipients(league.id)).length,
+      recipientCount: recipientList.length,
+      gameweekCount: gameweekCount(bootstrap),
+      // Only a success counts as sent — a failed attempt delivered nothing.
+      sentAt:
+        delivered?.status === 'sent' ? delivered.updatedAt.toISOString() : undefined,
     }
 
     persistence = {
