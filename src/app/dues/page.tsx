@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { DuesList } from '@/components/dues-list'
-import { ensureLeague, ensureMembership, getSettings, listDues } from '@/db/queries'
+import { NotAnOwner } from '@/components/not-an-owner'
+import { ensureLeague, findMembership, getSettings, listDues } from '@/db/queries'
 import { toCents } from '@/lib/digest/money'
 import { fpl } from '@/lib/fpl/client'
 import { buildRoster } from '@/lib/fpl/roster'
@@ -16,7 +17,7 @@ export default async function DuesPage() {
 
   const standings = await fpl.leagueStandingsAll(REFERENCE_LEAGUE.fplLeagueId)
   const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
-  await ensureMembership(league.id, session.user.id)
+  if (!(await findMembership(league.id, session.user.id))) return <NotAnOwner />
 
   // The full roster, including managers who have joined but aren't in standings yet —
   // they owe their dues regardless of whether a gameweek has been scored.

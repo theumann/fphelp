@@ -2,10 +2,12 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { Composer } from '@/components/composer'
+import { NotAnOwner } from '@/components/not-an-owner'
 import {
   ensureLeague,
   findDelivery,
   findDraft,
+  findMembership,
   getSettings,
   listRecipients,
   ownerSignature,
@@ -147,6 +149,12 @@ export default async function SendPage({
 
   if (!demo) {
     const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
+
+    // This page composes and sends to the whole league, so it checks membership like
+    // the others. The Server Actions behind it already call assertOwner — this stops a
+    // non-owner reading the draft, which those cannot.
+    if (!(await findMembership(league.id, session.user.id))) return <NotAnOwner />
+
     const digest = await upsertDigest(league.id, gameweek, stats)
     const draft = await findDraft(league.id, gameweek)
 

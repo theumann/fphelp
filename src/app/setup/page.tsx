@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
+import { NotAnOwner } from '@/components/not-an-owner'
 import { RecipientsList } from '@/components/recipients-list'
 import { SetupForm } from '@/components/setup-form'
 import {
   ensureLeague,
-  ensureMembership,
+  findMembership,
   getSettings,
   isFinalised,
   listRecipients,
@@ -27,7 +28,8 @@ export default async function SetupPage() {
   ])
 
   const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
-  const membership = await ensureMembership(league.id, session.user.id)
+  const membership = await findMembership(league.id, session.user.id)
+  if (!membership) return <NotAnOwner />
 
   const roster = buildRoster(standings)
   const settings = await getSettings(league.id)

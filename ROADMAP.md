@@ -111,6 +111,22 @@ Reference league config (this league): $100 entry × 18+ managers, $15 per gamew
 ### Phase 4 — season narrative stats
 - Manager of the month, worst GW ever, longest streak — pure queries over the history captured since Phase 1
 
+### UI/UX pass — carry an owners list into it
+
+Not yet scheduled, but planned before the season settles into routine. One item is
+already assigned to it rather than left to Phase 5:
+
+- **Add and remove owners from Setup.** Sign-in is allowlist-based, so an owner exists
+  only if a `users` row does, and today the only ways to create one are the
+  `BOOTSTRAP_OWNER_EMAIL` deploy script and editing the database by hand. Neither is
+  reachable by the person who actually needs it. A small Setup section — add an address,
+  see who has access, remove one — replaces both and is what makes the closed membership
+  rule workable rather than merely safe.
+- It belongs here and not in Phase 5 because it is a Setup page feature that wants
+  designing alongside the rest of that page. It is **not** the invite flow: no tokens, no
+  self-signup, and an added address still receives nothing until they request a sign-in
+  link themselves.
+
 ### Phase 5 — other people's leagues (multi-tenancy)
 
 Deliberately after GW1. The first real scored gameweek is a one-time, unrepeatable verification event (see [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md)); destabilising auth and bootstrap in that window trades a verifiable season for a feature nobody is waiting on yet.
@@ -119,7 +135,7 @@ Deliberately after GW1. The first real scored gameweek is a one-time, unrepeatab
 
 **What blocks it**, in the order it should be fixed:
 
-- **`ensureMembership` auto-adds.** Any signed-in user visiting `/setup` or `/dues` is *made* an owner of the league. With one hand-curated allowlist that is a convenience; with many leagues it is an authorisation hole — the first stranger to sign in joins someone else's league. Must become an explicit invite. **This is worth fixing even if multi-tenancy never ships**, because it is the one item that is latent today rather than merely missing.
+- ~~**`ensureMembership` auto-adds.**~~ **Done.** It was replaced by a read-only `findMembership`, and `/setup`, `/dues` and `/send` now refuse a non-member instead of enrolling them. Membership is granted only by `scripts/bootstrap-owner.mts`. This was fixed ahead of the rest because it was latent rather than merely missing: it needed no code change to become a hole, only a second league's owner appearing in `users`. What remains for this phase is the *invite* — tokens and self-signup — not the guard.
 - **No self-signup, by design.** `src/auth.ts` refuses any address not already in `users`. Unrelated owners cannot be added by hand, so this becomes signup plus per-league invites. Note what that costs: the allowlist currently rejects strangers *before* any email is sent, so the app cannot be used as a mail relay. Removing it means adding rate limiting to replace that property.
 - **One league per deployment.** `FPL_LEAGUE_ID` becomes the wrong shape. League selection moves into the database and the UI, with a create-league flow that validates a numeric ID against `leagues-classic/{id}/standings/` — and says plainly that the invite code is not the ID.
 - **The capture job is single-league.** It reads one league and makes 18 sequential FPL calls. Multi-league makes that a loop, and ~180 calls per window at ten leagues, from one Railway egress IP, behind Cloudflare. The egress-proxy mitigation currently "on the books" becomes real work, and the poll gate stops being an optimisation and starts being what keeps the app unblocked.

@@ -52,6 +52,7 @@ These are the traps that produce silently wrong output rather than errors:
 - **Paid places are configurable** — N is just the number of `season_rank_pct` rows. Validate contiguous ranks from 1 and percentages summing to 100%. Use decimals, and derive the last place as `remainder − sum(others)` so rounding can't miss the pot.
 - **Prize rules lock once the ledger is finalised.** Editing them mid-season only moves provisional projections; editing after season end rewrites settled `winnings` rows.
 - **Detect ties on `rank`, not `rank_sort`.** `rank_sort` imposes an arbitrary total order that makes a real tie look resolved; it's only for deciding where a rounding remainder lands.
+- **Membership is never granted by visiting a page.** `findMembership` is read-only and the pages refuse a non-member; only `scripts/bootstrap-owner.mts` creates the link. The predecessor auto-enrolled on first visit, which made loading `/setup` the act that conferred ownership.
 - **`role` grants nothing in v1.** It's stored for future permission work; every owner can do everything, including send.
 - **The FPL invite code is not the league ID.** `1xrliv` is a join code; the API needs the number from the league URL, and there's no unauthenticated way to convert one to the other.
 - **FPL sits behind Cloudflare** and blocks many datacenter IPs. Don't move to serverless with rotating egress. Cloudflare is a constraint we're subject to, not a vendor we use — Railway is the only host.

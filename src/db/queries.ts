@@ -424,22 +424,26 @@ export async function assertOwner(leagueId: string, userId: string) {
 }
 
 /**
- * Ensures the signed-in user is an owner of this league, creating the link on first
- * sign-in for the reference league. Returns the membership row.
+ * The signed-in user's membership of this league, or `null`.
+ *
+ * Deliberately read-only. This used to create the link on first visit, which made
+ * *visiting a page* the act that granted ownership — anyone who could sign in became an
+ * owner of the reference league by loading `/setup`. That was survivable only because
+ * sign-in is allowlisted to a hand-curated `users` table, so the set of people it could
+ * promote was the set already trusted. It stops being survivable the moment `users`
+ * holds someone who owns a different league, and that is a change to a table, not to
+ * this file — the kind of latent hole that opens without anyone touching the code near
+ * it.
+ *
+ * Membership is now granted deliberately: `scripts/bootstrap-owner.mts` at deploy time,
+ * and later an owners list in Setup (see ROADMAP).
  */
-export async function ensureMembership(leagueId: string, userId: string) {
-  const existing = await db.query.leagueUsers.findFirst({
-    where: and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)),
-  })
-  if (existing) return existing
-
-  const [created] = await db
-    .insert(leagueUsers)
-    .values({ leagueId, userId })
-    .onConflictDoNothing()
-    .returning()
-
-  return created ?? existing!
+export async function findMembership(leagueId: string, userId: string) {
+  return (
+    (await db.query.leagueUsers.findFirst({
+      where: and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)),
+    })) ?? null
+  )
 }
 
 /**
@@ -456,7 +460,7 @@ export async function ownerSignature(
   leagueName: string,
   roster: { entry: number; entryName: string }[],
 ): Promise<string> {
-  const membership = await ensureMembership(leagueId, userId)
+  const membership = await findMembership(leagueId, userId)
   const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
 
   const who = user?.name ?? user?.email ?? 'Admin'
