@@ -77,11 +77,17 @@ In PowerShell the `--` separator is swallowed by npm — it fails with "Workspac
 node --env-file-if-exists=.env --import tsx scripts/clear-test-digest.mts --gw 1 --confirm
 ```
 
-**Against production**, via Railway, and *without* the `--env-file` flag — `railway run` injects the production environment, and also loading the local `.env` risks the local `DATABASE_URL` winning, which would silently report on the wrong database:
+**Against production, run it inside the container.** `railway run` does *not* work here and the failure is confusing: it injects the production environment into a process on your machine, so `DATABASE_URL` resolves to `postgres.railway.internal`, which exists only on Railway's private network. The result is `ENOTFOUND` after everything looked correct. Use `railway ssh` instead — `tsx` is a runtime dependency, so the deployed container can run the script as-is:
 
 ```
-railway run --service fphelp-app node --import tsx scripts/clear-test-digest.mts --gw 1
+railway ssh --service fphelp-app
+node --import tsx scripts/clear-test-digest.mts --gw 1            # then --confirm
+exit
 ```
+
+Confirmed working 14 Aug 2026.
+
+If `railway ssh` is ever unavailable, the fallback is the Postgres service's `DATABASE_PUBLIC_URL` (a `…proxy.rlwy.net` host) set as `DATABASE_URL` for one local command — and unset afterwards, since a shell variable outranks `.env` and would silently point later commands at production.
 
 Every run prints the database it opened as its first line — check it before `--confirm`:
 
@@ -94,8 +100,11 @@ It refuses a gameweek whose digest contains scored managers, since that is real 
 
 **The digest row comes back, and that is fine.** Loading `/send` calls `upsertDigest`, so a cleared GW1 digest reappears on the next page view — observed immediately after the local cleanup. It is empty of everything that matters: `upsertDigest` overwrites the stats when GW1 actually scores, and no `messages` or `deliveries` row returns with it. Those only appear when someone saves a draft or sends. So the check that counts is **"no message, no delivery"**, not "no digest" — re-run the dry run and read those two lines rather than the first one.
 
+**Testing in production is fine, and the script is re-runnable — but the last run has a deadline.** Every prod test stamps fresh GW1 rows, so clear again after the final test. That run must happen **before GW1 is scored**, for two reasons: after scoring, the GW1 digest holds real results, and the guard will refuse it as real data. Overriding with `--force` at that point would delete the genuine record of the season's first send. So the order is: test freely → clear → hand over → GW1 scores. Once managers have points, this script is finished with gameweek 1 for good.
+
 - [x] **Local database cleared** on 13 Aug 2026 — one GW1 digest, one message ("Test email from Dev. #2", marked sent) and one email delivery row (sent, 2 recipients, 9 attempts).
-- [ ] **Production database cleared.** Not reachable from a developer machine, so run it from Railway against the prod service. Expect the same shape.
+- [x] **Production database cleared** on 14 Aug 2026, via `railway ssh`.
+- [ ] **Production cleared again after the last round of testing**, and before GW1 scores. This is the one that matters — see the deadline above.
 - [ ] The demo GW5 row is left in place deliberately — harmless until October, and it exercises the guard.
 
 The underlying reasons, worth keeping even once the script exists:
