@@ -17,6 +17,7 @@ TypeScript / Node 24, **Next.js 16.3 (App Router) + React 19.2**, Postgres + Dri
 - `npm run dev` — local dev server
 - `npm run build` / `npm start` — production build and serve
 - `npm run lint` — ESLint
+- `npm run db:clear-digest -- --gw N` — deletes one gameweek's digest, messages and deliveries for the reference league. Dry run without `--confirm`. Manual only, never a deploy hook — it removes the owner's own writing. See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §6b.
 
 Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects").
 
