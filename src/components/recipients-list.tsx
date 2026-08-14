@@ -8,6 +8,8 @@ import {
   setEmailEnabledAction,
 } from '@/app/setup/actions'
 
+import { Alert, Button, Card, inputClass } from './ui'
+
 export interface Recipient {
   id: string
   email: string
@@ -51,7 +53,12 @@ export function RecipientsList({
     startTransition(async () => {
       const result = await addRecipientsAction({ leagueId, raw })
       if (result.ok) {
-        setStatus({ kind: 'added', added: result.added, skipped: result.skipped, invalid: result.invalid })
+        setStatus({
+          kind: 'added',
+          added: result.added,
+          skipped: result.skipped,
+          invalid: result.invalid,
+        })
         // Cleared only on success, so a failed paste isn't lost.
         setRaw('')
       }
@@ -66,25 +73,27 @@ export function RecipientsList({
   }
 
   return (
-    <section className="flex flex-col gap-4 border-t border-neutral-200 pt-6 dark:border-neutral-800">
-      <div>
-        <h2 className="text-base font-semibold">Email digest</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Optional. WhatsApp needs no addresses — email does, and only you can supply them.
+    <Card
+      title="Email digest"
+      hint="Optional. WhatsApp needs no addresses — email does, and only you can supply them."
+      aside={
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={pending}
+            onChange={(e) => toggle(e.target.checked)}
+            className="size-4 accent-accent"
+          />
+          <span>{enabled ? 'On' : 'Off'}</span>
+        </label>
+      }
+    >
+      {!enabled ? (
+        <p className="text-sm text-muted">
+          This league sends by WhatsApp only. Turn email on to keep a recipient list.
         </p>
-      </div>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={pending}
-          onChange={(e) => toggle(e.target.checked)}
-        />
-        Send this league&apos;s digest by email as well
-      </label>
-
-      {enabled && (
+      ) : (
         <>
           <div className="flex flex-col gap-2">
             <label htmlFor="recipients" className="text-sm font-medium">
@@ -95,70 +104,71 @@ export function RecipientsList({
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
               rows={3}
-              placeholder="steve@example.com, Indigo Mwangi &lt;victor@example.com&gt;"
-              className="rounded-lg border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              placeholder="steve@example.com, Indigo Mwangi <victor@example.com>"
+              className={`${inputClass} text-sm`}
             />
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs leading-relaxed text-muted">
               Paste as many as you like — separated by commas, semicolons or new lines.
-              Names in <code>Name &lt;address&gt;</code> form are kept.
+              Names in <code className="font-mono">Name &lt;address&gt;</code> form are kept.
             </p>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
+              className="self-start"
               onClick={add}
               disabled={pending || !raw.trim()}
-              className="self-start rounded-lg bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
             >
               {pending ? 'Adding…' : 'Add to list'}
-            </button>
+            </Button>
           </div>
 
           {status.kind === 'added' && (
-            <div className="rounded-lg bg-neutral-100 p-3 text-sm dark:bg-neutral-900">
+            <Alert>
               <p>
                 Added {status.added}
                 {status.skipped > 0 && `, ${status.skipped} already on the list`}.
               </p>
               {status.invalid.length > 0 && (
-                <p className="mt-1 text-red-700 dark:text-red-300">
+                <p className="mt-1 text-danger">
                   Couldn&apos;t read {status.invalid.length}:{' '}
                   <span className="font-mono">{status.invalid.join(', ')}</span>
                 </p>
               )}
-            </div>
+            </Alert>
           )}
 
           <div>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-muted">
               {recipients.length} {recipients.length === 1 ? 'address' : 'addresses'} for{' '}
               {managerCount} managers.
               {recipients.length < managerCount && ' Someone is likely missing.'}
             </p>
 
-            <ul className="mt-2 divide-y divide-neutral-200 dark:divide-neutral-800">
+            <ul className="mt-2 divide-y divide-line">
               {recipients.map((r) => (
-                <li key={r.id} className="flex items-center justify-between gap-2 py-2 text-sm">
-                  <span className="truncate">
+                <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <span className="min-w-0 truncate text-sm">
                     {r.name ? `${r.name} — ` : ''}
-                    <span className="text-neutral-500">{r.email}</span>
+                    <span className="text-muted">{r.email}</span>
                   </span>
-                  <button
-                    type="button"
+                  <Button
+                    variant="danger"
+                    size="sm"
                     disabled={pending}
                     onClick={() =>
                       startTransition(async () => {
                         await removeRecipientAction({ leagueId, id: r.id })
                       })
                     }
-                    className="shrink-0 text-neutral-500 underline disabled:opacity-50"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
           </div>
         </>
       )}
-    </section>
+    </Card>
   )
 }

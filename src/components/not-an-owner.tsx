@@ -9,12 +9,16 @@
 export function NotAnOwner() {
   return (
     <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-lg font-semibold">You don&apos;t have access to this league</h1>
-      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-        You&apos;re signed in, but your account isn&apos;t one of this league&apos;s owners.
-        Access is granted deliberately rather than by signing up — ask an existing owner
-        to add you.
-      </p>
+      <div className="rounded-xl border border-line bg-surface p-5">
+        <h1 className="text-lg font-semibold tracking-tight">
+          You don&apos;t have access to this league
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          You&apos;re signed in, but your account isn&apos;t one of this league&apos;s owners.
+          Access is granted deliberately rather than by signing up — ask an existing owner
+          to add you from their Setup page.
+        </p>
+      </div>
     </main>
   )
 }

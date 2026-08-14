@@ -436,7 +436,7 @@ export async function assertOwner(leagueId: string, userId: string) {
  * it.
  *
  * Membership is now granted deliberately: `scripts/bootstrap-owner.mts` at deploy time,
- * and later an owners list in Setup (see ROADMAP).
+ * and `addOwner` below, called by the owners list in Setup.
  */
 export async function findMembership(leagueId: string, userId: string) {
   return (
@@ -444,6 +444,119 @@ export async function findMembership(leagueId: string, userId: string) {
       where: and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)),
     })) ?? null
   )
+}
+
+export interface Owner {
+  userId: string
+  email: string
+  name: string | null
+  role: 'communicator' | 'treasurer'
+  /** Set once they have signed in at least once — an added address has not, yet. */
+  hasSignedIn: boolean
+}
+
+/** Everyone who can administer this league, oldest membership first. */
+export async function listOwners(leagueId: string): Promise<Owner[]> {
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      name: users.name,
+      role: leagueUsers.role,
+      emailVerified: users.emailVerified,
+      createdAt: leagueUsers.createdAt,
+    })
+    .from(leagueUsers)
+    .innerJoin(users, eq(users.id, leagueUsers.userId))
+    .where(eq(leagueUsers.leagueId, leagueId))
+    .orderBy(leagueUsers.createdAt)
+
+  return rows.map((r) => ({
+    userId: r.userId,
+    email: r.email,
+    name: r.name,
+    role: r.role,
+    hasSignedIn: r.emailVerified !== null,
+  }))
+}
+
+export type AddOwnerOutcome = 'added' | 'already-owner'
+
+/**
+ * Grants ownership of a league to an email address.
+ *
+ * Two rows, and both are load-bearing. The `users` row is what lets the address sign in
+ * at all — `src/auth.ts` allowlists against that table — and the `league_users` row is
+ * what any page or Server Action actually checks. Creating only the first would produce
+ * someone who can sign in and see nothing; only the second is impossible, since it needs
+ * a user id.
+ *
+ * This is not an invite: nothing is emailed, and the added owner gets in only when they
+ * request a sign-in link themselves.
+ */
+export async function addOwner(
+  leagueId: string,
+  email: string,
+  name: string | null,
+): Promise<{ outcome: AddOwnerOutcome; owner: Owner }> {
+  // Insert-then-read rather than read-then-insert. Checking for the address first and
+  // inserting if absent is a race that ends in a unique-violation crash when two owners
+  // add the same person at once; `onConflictDoNothing` makes the collision a no-op and
+  // the re-read resolves it. Rare, but the failure is an unhandled 500 rather than a
+  // message the owner can act on.
+  //
+  // A name is only ever set on creation. Overwriting an existing user's name from a
+  // pasted `Name <address>` would rename them for every league they own.
+  const [created] = await db
+    .insert(users)
+    .values({ email, name })
+    .onConflictDoNothing({ target: users.email })
+    .returning()
+
+  const user =
+    created ?? (await db.query.users.findFirst({ where: eq(users.email, email) }))!
+
+  const link = await db
+    .insert(leagueUsers)
+    .values({ leagueId, userId: user.id })
+    .onConflictDoNothing()
+    .returning({ role: leagueUsers.role })
+
+  return {
+    outcome: link.length > 0 ? 'added' : 'already-owner',
+    owner: {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: link[0]?.role ?? 'communicator',
+      hasSignedIn: user.emailVerified !== null,
+    },
+  }
+}
+
+/**
+ * Revokes ownership.
+ *
+ * Deletes the membership only, never the `users` row. The user row carries authorship —
+ * `messages.created_by`, `deliveries.sent_by` — and those references are `set null`, so
+ * deleting the account would quietly erase who sent past digests to the league. A removed
+ * owner keeps the ability to request a sign-in link and is then met with "not an owner";
+ * that is the intended outcome, and access is genuinely gone because every page resolves
+ * membership per request rather than trusting the session.
+ */
+export async function removeOwner(leagueId: string, userId: string) {
+  await db
+    .delete(leagueUsers)
+    .where(and(eq(leagueUsers.leagueId, leagueId), eq(leagueUsers.userId, userId)))
+}
+
+/** Used to refuse the removal that would leave the league unadministrable. */
+export async function ownerCount(leagueId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leagueUsers)
+    .where(eq(leagueUsers.leagueId, leagueId))
+  return row?.count ?? 0
 }
 
 /**

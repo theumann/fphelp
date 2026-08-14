@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
+/**
+ * Design tokens.
+ *
+ * Every colour the app uses is named here and referenced through Tailwind utilities
+ * (`bg-surface`, `text-muted`, `border-line`). Components must not reach for raw
+ * `neutral-300` / `neutral-900` pairs: those were duplicated across every file, drifted
+ * apart, and made dark mode something each component re-derived by hand.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fbfbfc;
+  --foreground: #18181b;
+
+  /* Raised panels sit on the page background; muted fills sit inside a panel. */
+  --surface: #ffffff;
+  --surface-muted: #f4f4f5;
+
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+
+  --muted: #71717a;
+  --faint: #a1a1aa;
+
+  /* Primary action. Inverted against the page rather than a brand colour. */
+  --accent: #18181b;
+  --accent-foreground: #ffffff;
+
+  --danger: #b91c1c;
+  --danger-surface: #fef2f2;
+  --success: #15803d;
+  --success-surface: #f0fdf4;
+  --warning: #92400e;
+  --warning-surface: #fffbeb;
+
+  --ring: #71717a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #ededed;
+
+    --surface: #121215;
+    --surface-muted: #1c1c20;
+
+    --line: #27272a;
+    --line-strong: #3f3f46;
+
+    --muted: #a1a1aa;
+    --faint: #71717a;
+
+    --accent: #fafafa;
+    --accent-foreground: #18181b;
+
+    --danger: #fca5a5;
+    --danger-surface: #2a1416;
+    --success: #86efac;
+    --success-surface: #0f2418;
+    --warning: #fcd34d;
+    --warning-surface: #2a1f0a;
+
+    --ring: #a1a1aa;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-ring: var(--ring);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist is loaded in the layout; this used to hardcode Arial and silently discard it. */
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/**
+ * A visible focus ring on every interactive element, keyboard-only.
+ *
+ * Set globally because it is the accessibility property most likely to be forgotten one
+ * component at a time — and the one nobody notices missing until they cannot use the app.
+ */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.35rem;
 }
