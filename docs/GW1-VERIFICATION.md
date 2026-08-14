@@ -64,6 +64,29 @@ The most interesting moment in the whole season for this app, and it only happen
 
 The league (9999999) is the real one, so its `managers`, `dues` and settings are real data and must be kept. What is *not* real is what pre-season testing wrote against **gameweek 1**:
 
+**There is a script for this** — `npm run db:clear-digest`. It deletes the digest, its messages and its delivery rows for one gameweek of the reference league, and nothing else. Dry run by default; `--confirm` deletes; re-running is a no-op.
+
+```
+npm run db:clear-digest -- --gw 1              # show what would go
+npm run db:clear-digest -- --gw 1 --confirm    # delete it
+```
+
+In PowerShell the `--` separator is swallowed by npm, so call node directly:
+
+```
+node --env-file-if-exists=.env --import tsx scripts/clear-test-digest.mts --gw 1 --confirm
+```
+
+It refuses a gameweek whose digest contains scored managers, since that is real data rather than a test artifact — `--force` overrides, and should not be needed. Note this catches the **demo** GW5 digest too: demo scores are indistinguishable from real ones, so clearing that one needs `--force`.
+
+**The digest row comes back, and that is fine.** Loading `/send` calls `upsertDigest`, so a cleared GW1 digest reappears on the next page view — observed immediately after the local cleanup. It is empty of everything that matters: `upsertDigest` overwrites the stats when GW1 actually scores, and no `messages` or `deliveries` row returns with it. Those only appear when someone saves a draft or sends. So the check that counts is **"no message, no delivery"**, not "no digest" — re-run the dry run and read those two lines rather than the first one.
+
+- [x] **Local database cleared** on 13 Aug 2026 — one GW1 digest, one message ("Test email from Dev. #2", marked sent) and one email delivery row (sent, 2 recipients, 9 attempts).
+- [ ] **Production database cleared.** Not reachable from a developer machine, so run it from Railway against the prod service. Expect the same shape.
+- [ ] The demo GW5 row is left in place deliberately — harmless until October, and it exercises the guard.
+
+The underlying reasons, worth keeping even once the script exists:
+
 - [ ] **Delete any GW1 draft in `messages`.** `/send` pre-season labels its digest gameweek 1 (there is no finished gameweek, so it falls back to 1). A draft saved while testing will be loaded by `findDraft` into the real GW1 composer — pre-season text, silently, at the one moment it matters.
 - [ ] **The GW1 `digests` row is self-healing** — `upsertDigest` overwrites the stats when GW1 actually scores — but confirm rather than assume, since a score-less digest looks plausible.
 - [ ] **Check for a `sent` message on GW1.** If one exists from testing, the composer's sent/draft state for the real GW1 starts wrong.
