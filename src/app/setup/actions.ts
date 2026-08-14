@@ -4,15 +4,18 @@ import { revalidatePath } from 'next/cache'
 
 import { auth } from '@/auth'
 import {
+  addOwner,
   addRecipients,
   assertOwner,
   isFinalised,
+  ownerCount,
+  removeOwner,
   removeRecipient,
   saveSettings,
   setEmailEnabled,
   setManagerEntry,
 } from '@/db/queries'
-import { parseRecipientList } from '@/lib/email/recipients'
+import { parseRecipient, parseRecipientList } from '@/lib/email/recipients'
 import { validateSettings, type LeagueSettings } from '@/lib/league-settings'
 
 export interface SaveSettingsResult {
@@ -111,6 +114,67 @@ export async function setEmailEnabledAction(input: { leagueId: string; enabled: 
   await setEmailEnabled(input.leagueId, input.enabled)
   revalidatePath('/setup')
   revalidatePath('/send')
+}
+
+export type AddOwnerResult =
+  | { ok: true; outcome: 'added' | 'already-owner'; email: string }
+  | { ok: false; error: string }
+
+/**
+ * Grants another person ownership of this league.
+ *
+ * The counterpart to the allowlist in `src/auth.ts`: until this runs, an address cannot
+ * sign in at all. It is deliberately not an invite — no token, no email, no self-signup.
+ * The added owner gets in by requesting a sign-in link themselves, which keeps the
+ * property that the app never mails an address that did not ask it to.
+ */
+export async function addOwnerAction(input: {
+  leagueId: string
+  raw: string
+}): Promise<AddOwnerResult> {
+  const session = await auth()
+  if (!session?.user?.id) return { ok: false, error: 'Not signed in.' }
+  await assertOwner(input.leagueId, session.user.id)
+
+  const parsed = parseRecipient(input.raw)
+  if (!parsed) return { ok: false, error: `“${input.raw.trim()}” is not an email address.` }
+
+  const { outcome } = await addOwner(input.leagueId, parsed.email, parsed.name)
+
+  revalidatePath('/setup')
+  return { ok: true, outcome, email: parsed.email }
+}
+
+export type RemoveOwnerResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Revokes another owner's access.
+ *
+ * Two removals are refused rather than confirmed. Removing the last owner would leave
+ * the league with no one able to administer it and no way back in short of a redeploy,
+ * since membership can only be granted from inside. Removing yourself is the same
+ * mistake one step removed — a co-owner can do it for you, and then the person losing
+ * access is not also the person who has to be sure.
+ */
+export async function removeOwnerAction(input: {
+  leagueId: string
+  userId: string
+}): Promise<RemoveOwnerResult> {
+  const session = await auth()
+  if (!session?.user?.id) return { ok: false, error: 'Not signed in.' }
+  await assertOwner(input.leagueId, session.user.id)
+
+  if (input.userId === session.user.id) {
+    return { ok: false, error: 'You cannot remove yourself. Ask a co-owner to do it.' }
+  }
+
+  if ((await ownerCount(input.leagueId)) <= 1) {
+    return { ok: false, error: 'A league must keep at least one owner.' }
+  }
+
+  await removeOwner(input.leagueId, input.userId)
+  revalidatePath('/setup')
+  return { ok: true }
 }
 
 function describe(error: ReturnType<typeof validateSettings>[number]): string {

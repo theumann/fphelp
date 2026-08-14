@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseRecipientList } from './recipients'
+import { parseRecipient, parseRecipientList } from './recipients'
 
 describe('parseRecipientList', () => {
   it('parses a plain address', () => {
@@ -57,5 +57,34 @@ describe('parseRecipientList', () => {
 
   it('returns empty results for empty input', () => {
     expect(parseRecipientList('')).toEqual({ valid: [], invalid: [], duplicates: [] })
+  })
+})
+
+/**
+ * The single-address entry point, used by the owners list in Setup.
+ *
+ * Covered separately from `parseRecipientList` because it now has a caller with different
+ * stakes: a mistyped digest recipient bounces and says so, while a mistyped owner address
+ * silently creates an account nobody can sign into.
+ */
+describe('parseRecipient', () => {
+  it('parses a plain address, lowercased', () => {
+    expect(parseRecipient(' Owner@Example.COM ')).toEqual({
+      email: 'owner@example.com',
+      name: null,
+    })
+  })
+
+  it('keeps the display name from a mail-client paste', () => {
+    expect(parseRecipient('Tracy Chen <tracy@example.com>')).toEqual({
+      email: 'tracy@example.com',
+      name: 'Tracy Chen',
+    })
+  })
+
+  it('rejects anything that is not an address', () => {
+    for (const bad of ['', '   ', 'not-an-email', 'a@b', 'two@example.com, three@example.com']) {
+      expect(parseRecipient(bad)).toBeNull()
+    }
   })
 })

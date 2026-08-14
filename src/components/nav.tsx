@@ -19,7 +19,7 @@ function SignOutButton() {
     <button
       type="submit"
       disabled={pending}
-      className="rounded-lg px-3 py-2 text-sm text-neutral-600 disabled:opacity-50 dark:text-neutral-400"
+      className="rounded-lg px-3 py-2 text-sm text-muted disabled:opacity-50"
     >
       {pending ? 'Signing out…' : 'Sign out'}
     </button>
@@ -41,16 +41,17 @@ export function Nav({ who }: { who?: string | null }) {
   if (pathname === '/signin' || pathname === '/') return null
 
   return (
-    <nav className="border-b border-neutral-200 dark:border-neutral-800">
+    <nav className="border-b border-line bg-surface">
       <div className="mx-auto flex w-full max-w-xl items-center gap-1 p-2">
         {LINKS.map(({ href, label }) => (
           <Link
             key={href}
             href={href}
-            className={`rounded-lg px-3 py-2 text-sm ${
+            aria-current={pathname === href ? 'page' : undefined}
+            className={`rounded-lg px-3 py-2 text-sm transition-colors ${
               pathname === href
-                ? 'bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900'
-                : 'text-neutral-600 dark:text-neutral-400'
+                ? 'bg-accent font-medium text-accent-foreground'
+                : 'text-muted hover:bg-surface-muted hover:text-foreground'
             }`}
           >
             {label}
@@ -61,7 +62,7 @@ export function Nav({ who }: { who?: string | null }) {
           <form action={signOutAction} className="ml-auto flex items-center gap-2">
             {/* Hidden on narrow screens: the phone is the primary device and the nav
                 links must not wrap to make room for an address. */}
-            <span className="hidden max-w-[16ch] truncate text-xs text-neutral-500 sm:inline">
+            <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline">
               {who}
             </span>
             <SignOutButton />

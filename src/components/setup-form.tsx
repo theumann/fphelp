@@ -13,10 +13,10 @@ import {
   type LeagueSettings,
 } from '@/lib/league-settings'
 
+import { Alert, Button, Card, Field, SummaryRow, inputClass } from './ui'
+
 interface Props {
   leagueId: string
-  leagueName: string
-  fplLeagueId: number
   initial: LeagueSettings
   gameweekCount: number
   managers: { entry: number; entryName: string; playerName: string }[]
@@ -65,13 +65,8 @@ function toSettings(d: Draft): LeagueSettings {
   }
 }
 
-const field =
-  'w-full rounded-lg border border-neutral-300 p-2.5 text-base dark:border-neutral-700 dark:bg-neutral-900'
-
 export function SetupForm({
   leagueId,
-  leagueName,
-  fplLeagueId,
   initial,
   gameweekCount,
   managers,
@@ -95,16 +90,32 @@ export function SetupForm({
   const summary = useMemo(() => summarise(settings, gameweekCount), [settings, gameweekCount])
   const money = (cents: number) => formatCents(cents, settings.currency || 'USD')
 
+  /**
+   * Whether anything is unsaved.
+   *
+   * Worth tracking because this section saves on a button while the lists below it save
+   * on every click — two save models on one page. The bar only appears when there is
+   * something to lose, which is what makes the difference legible instead of arbitrary.
+   */
+  const dirty =
+    JSON.stringify(draft) !== JSON.stringify(toDraft(initial)) ||
+    managerEntry !== initialManagerEntry
+
   const pctTotal = settings.rankPercentages.reduce((a, b) => a + b, 0)
   const feeSuggestion =
     settings.entryFee !== undefined && settings.entryFee > 0
       ? settings.entryFee * managers.length
       : null
 
+  function edit(patch: Partial<Draft>) {
+    setDraft({ ...draft, ...patch })
+    setResult(null)
+  }
+
   function setPct(index: number, value: string) {
     const next = [...draft.rankPercentages]
     next[index] = value
-    setDraft({ ...draft, rankPercentages: next })
+    edit({ rankPercentages: next })
   }
 
   async function submit() {
@@ -122,197 +133,180 @@ export function SetupForm({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-6 p-4 pb-10">
-      <header>
-        <h1 className="text-xl font-semibold">League setup</h1>
-        <p className="text-sm text-neutral-500">
-          {leagueName} · FPL league {fplLeagueId} · {managers.length} managers ·{' '}
-          {gameweekCount} gameweeks
-        </p>
-      </header>
-
+    <div className="flex flex-col gap-5">
       {finalised && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <Alert tone="warning">
           This season is finalised. Prize rules are locked — changing them now would
           rewrite winnings that have already been settled.
-        </p>
+        </Alert>
       )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">The pot</h2>
-
+      <Card
+        title="The pot"
+        hint="Entered directly rather than derived from the entry fee — some managers may not have paid, and the roster changes as people join."
+      >
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-sm">Currency</span>
+          <Field label="Currency">
             <input
               value={draft.currency}
-              onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })}
+              onChange={(e) => edit({ currency: e.target.value.toUpperCase() })}
               maxLength={3}
-              className={field}
+              className={inputClass}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm">Entry fee (optional)</span>
+          </Field>
+          <Field label="Entry fee (optional)">
             <input
               type="number"
               inputMode="decimal"
               step="0.01"
               value={draft.entryFee}
-              onChange={(e) => setDraft({ ...draft, entryFee: e.target.value })}
-              className={field}
+              onChange={(e) => edit({ entryFee: e.target.value })}
+              className={inputClass}
             />
-          </label>
+          </Field>
         </div>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-sm">Total pot</span>
+        <Field label="Total pot">
           <input
             type="number"
             inputMode="decimal"
             step="0.01"
             value={draft.potTotal}
-            onChange={(e) => setDraft({ ...draft, potTotal: e.target.value })}
-            className={field}
+            onChange={(e) => edit({ potTotal: e.target.value })}
+            className={inputClass}
           />
-          <span className="text-xs text-neutral-500">
-            Entered directly rather than derived from the entry fee — some managers may
-            not have paid, and the roster changes as people join.
-          </span>
-          {feeSuggestion !== null && feeSuggestion !== settings.potTotal && (
-            <button
-              type="button"
-              onClick={() => setDraft({ ...draft, potTotal: String(feeSuggestion) })}
-              className="self-start text-xs underline"
-            >
-              Use {managers.length} × {money(Math.round(settings.entryFee! * 100))} ={' '}
-              {money(Math.round(feeSuggestion * 100))}
-            </button>
-          )}
-        </label>
-      </section>
+        </Field>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">Fixed prizes</h2>
+        {feeSuggestion !== null && feeSuggestion !== settings.potTotal && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="self-start"
+            onClick={() => edit({ potTotal: String(feeSuggestion) })}
+          >
+            Use {managers.length} × {money(Math.round(settings.entryFee! * 100))} ={' '}
+            {money(Math.round(feeSuggestion * 100))}
+          </Button>
+        )}
+      </Card>
+
+      <Card
+        title="Fixed prizes"
+        hint="Paid off the top. Whatever is left is what the final table shares."
+      >
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-sm">Each gameweek winner</span>
+          <Field label="Each gameweek winner">
             <input
               type="number"
               inputMode="decimal"
               step="0.01"
               value={draft.gwWinnerAmount}
-              onChange={(e) => setDraft({ ...draft, gwWinnerAmount: e.target.value })}
-              className={field}
+              onChange={(e) => edit({ gwWinnerAmount: e.target.value })}
+              className={inputClass}
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm">Best gameweek of season</span>
+          </Field>
+          <Field label="Best gameweek of season">
             <input
               type="number"
               inputMode="decimal"
               step="0.01"
               value={draft.seasonBestGwAmount}
-              onChange={(e) => setDraft({ ...draft, seasonBestGwAmount: e.target.value })}
-              className={field}
+              onChange={(e) => edit({ seasonBestGwAmount: e.target.value })}
+              className={inputClass}
             />
-          </label>
+          </Field>
         </div>
 
         {/* The arithmetic that is easy to get wrong: fixed prizes come off the top. */}
-        <dl className="rounded-lg bg-neutral-100 p-3 text-sm dark:bg-neutral-900">
-          <div className="flex justify-between">
-            <dt>Pot</dt>
-            <dd>{money(pot.potCents)}</dd>
-          </div>
-          <div className="flex justify-between text-neutral-500">
-            <dt>
-              Fixed prizes ({gameweekCount} × {money(summary.gwWinnerCents)} + best GW)
-            </dt>
-            <dd>−{money(pot.committedFixedCents)}</dd>
-          </div>
-          <div className="mt-1 flex justify-between border-t border-neutral-300 pt-1 font-medium dark:border-neutral-700">
-            <dt>Remainder for final table</dt>
-            <dd className={pot.remainderCents < 0 ? 'text-red-600' : ''}>
-              {money(pot.remainderCents)}
-            </dd>
-          </div>
+        <dl className="rounded-lg bg-surface-muted p-3">
+          <SummaryRow label="Pot" value={money(pot.potCents)} />
+          <SummaryRow
+            label={`Fixed prizes (${gameweekCount} × ${money(summary.gwWinnerCents)} + best GW)`}
+            value={`−${money(pot.committedFixedCents)}`}
+          />
+          <SummaryRow
+            label="Remainder for final table"
+            value={money(pot.remainderCents)}
+            emphasis
+            tone={pot.remainderCents < 0 ? 'danger' : undefined}
+          />
         </dl>
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-medium">Paid places</h2>
-          <span className={pctTotal === 100 ? 'text-xs text-neutral-500' : 'text-xs text-red-600'}>
+      <Card
+        title="Paid places"
+        hint="Percentages of the remainder, not of the pot."
+        aside={
+          <span className={pctTotal === 100 ? '' : 'font-medium text-danger'}>
             {pctTotal}% of {money(pot.remainderCents)}
           </span>
-        </div>
-
-        {draft.rankPercentages.map((pct, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-6 text-sm text-neutral-500">{i + 1}.</span>
-            <div className="relative flex-1">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                value={pct}
-                onChange={(e) => setPct(i, e.target.value)}
-                className={`${field} pr-7`}
-              />
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-500">
-                %
+        }
+      >
+        <ul className="flex flex-col gap-2">
+          {draft.rankPercentages.map((pct, i) => (
+            <li key={i} className="flex items-center gap-2">
+              <span className="w-6 shrink-0 text-sm tabular-nums text-muted">{i + 1}.</span>
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  aria-label={`Percentage for place ${i + 1}`}
+                  value={pct}
+                  onChange={(e) => setPct(i, e.target.value)}
+                  className={`${inputClass} pr-7`}
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                  %
+                </span>
+              </div>
+              <span className="w-24 shrink-0 text-right text-sm tabular-nums">
+                {money(summary.rankPrizeCents[i] ?? 0)}
               </span>
-            </div>
-            <span className="w-24 text-right text-sm tabular-nums">
-              {money(summary.rankPrizeCents[i] ?? 0)}
-            </span>
-            <button
-              type="button"
-              onClick={() =>
-                setDraft({
-                  ...draft,
-                  rankPercentages: draft.rankPercentages.filter((_, j) => j !== i),
-                })
-              }
-              className="text-sm text-neutral-500 underline"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
+              <Button
+                variant="danger"
+                size="sm"
+                aria-label={`Remove place ${i + 1}`}
+                onClick={() =>
+                  edit({ rankPercentages: draft.rankPercentages.filter((_, j) => j !== i) })
+                }
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
 
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setDraft({ ...draft, rankPercentages: [...draft.rankPercentages, ''] })
-            }
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700"
+          <Button
+            size="sm"
+            onClick={() => edit({ rankPercentages: [...draft.rankPercentages, ''] })}
           >
             Add a place
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
+            disabled={draft.rankPercentages.length === 0}
             onClick={() =>
-              setDraft({
-                ...draft,
+              edit({
                 rankPercentages: suggestPercentages(draft.rankPercentages.length).map(String),
               })
             }
-            disabled={draft.rankPercentages.length === 0}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm disabled:opacity-40 dark:border-neutral-700"
           >
             Suggest percentages
-          </button>
+          </Button>
         </div>
-      </section>
+      </Card>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium">Your team</h2>
+      <Card title="Your team" hint="Used to sign the messages you send. Each owner sets their own.">
         <select
+          aria-label="Your FPL team in this league"
           value={managerEntry ?? ''}
-          onChange={(e) => setManagerEntry(e.target.value === '' ? null : Number(e.target.value))}
-          className={field}
+          onChange={(e) => {
+            setManagerEntry(e.target.value === '' ? null : Number(e.target.value))
+            setResult(null)
+          }}
+          className={inputClass}
         >
           <option value="">I don&apos;t play in this league</option>
           {managers.map((m) => (
@@ -321,39 +315,45 @@ export function SetupForm({
             </option>
           ))}
         </select>
-        <span className="text-xs text-neutral-500">
-          Used to sign the messages you send. Each owner sets their own.
-        </span>
-      </section>
+      </Card>
 
       {errors.length > 0 && (
-        <ul className="flex flex-col gap-1 rounded-lg bg-red-50 p-3 text-sm text-red-900 dark:bg-red-950 dark:text-red-200">
-          {errors.map((e, i) => (
-            <li key={i}>{describeError(e)}</li>
-          ))}
-        </ul>
+        <Alert tone="danger">
+          <ul className="flex flex-col gap-1">
+            {errors.map((e, i) => (
+              <li key={i}>{describeError(e)}</li>
+            ))}
+          </ul>
+        </Alert>
       )}
 
       {result && (
-        <p
-          className={`rounded-lg p-3 text-sm ${
-            result.ok
-              ? 'bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200'
-              : 'bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200'
-          }`}
-        >
-          {result.ok ? 'Saved.' : result.errors.join(' ')}
-        </p>
+        <Alert tone={result.ok ? 'success' : 'danger'}>
+          {result.ok ? 'Settings saved.' : result.errors.join(' ')}
+        </Alert>
       )}
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={saving || errors.length > 0 || finalised}
-        className="rounded-lg bg-neutral-900 p-3 text-base font-medium text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
-      >
-        {saving ? 'Saving…' : 'Save settings'}
-      </button>
+      {/* Sticky while these settings are on screen, so the save button is never below
+          three cards of scroll on a phone. It scrolls away with the section it belongs
+          to, which keeps it from claiming the lists further down the page. */}
+      <div className="sticky bottom-0 -mx-4 border-t border-line bg-background/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted">
+            {finalised
+              ? 'Locked — the season is finalised.'
+              : dirty
+                ? 'Unsaved changes'
+                : 'All changes saved'}
+          </span>
+          <Button
+            variant="primary"
+            onClick={submit}
+            disabled={saving || errors.length > 0 || finalised || !dirty}
+          >
+            {saving ? 'Saving…' : 'Save settings'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

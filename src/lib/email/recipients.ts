@@ -22,6 +22,17 @@ const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/
 /** Matches `Name <email@example.com>`, the form that survives a copy-paste from a mail client. */
 const NAMED = /^\s*(.*?)\s*<([^>]+)>\s*$/
 
+/**
+ * Parses a single entry, in either `address` or `Name <address>` form.
+ *
+ * Exported because the owners list validates one address at a time with exactly the same
+ * permissiveness — an owner's address and a member's address are the same kind of thing,
+ * and two regexes that disagree about what an address is would be worse than one.
+ */
+export function parseRecipient(raw: string): ParsedRecipient | null {
+  return parseOne(raw)
+}
+
 function parseOne(raw: string): ParsedRecipient | null {
   const entry = raw.trim()
   if (!entry) return null

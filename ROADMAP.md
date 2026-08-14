@@ -113,15 +113,28 @@ Reference league config (this league): $100 entry × 18+ managers, $15 per gamew
 
 ### UI/UX pass — carry an owners list into it
 
-Not yet scheduled, but planned before the season settles into routine. One item is
-already assigned to it rather than left to Phase 5:
+Not yet scheduled, but planned before the season settles into routine. Started on Setup,
+which is where the one committed feature below lives.
 
-- **Add and remove owners from Setup.** Sign-in is allowlist-based, so an owner exists
-  only if a `users` row does, and today the only ways to create one are the
+**Landed so far.** Design tokens in `globals.css` (every colour named once, dark mode
+defined in one place) and a small set of shared primitives in `src/components/ui.tsx` —
+`Card`, `Field`, `Button`, `Alert`. Setup, the nav and the not-an-owner screen use them;
+`/send` and `/dues` do not yet. Setup also resolved a split that ran through the page: the
+settings form batches behind a Save button while the lists write on every click, so the
+form now carries a sticky bar that says whether anything is unsaved rather than leaving
+the two models to be inferred.
+
+One item is already assigned to this pass rather than left to Phase 5:
+
+- ✅ **Add and remove owners from Setup.** Sign-in is allowlist-based, so an owner exists
+  only if a `users` row does, and the only ways to create one were the
   `BOOTSTRAP_OWNER_EMAIL` deploy script and editing the database by hand. Neither is
-  reachable by the person who actually needs it. A small Setup section — add an address,
-  see who has access, remove one — replaces both and is what makes the closed membership
-  rule workable rather than merely safe.
+  reachable by the person who actually needs it. A Setup section — add an address, see
+  who has access, remove one — replaces both and is what makes the closed membership rule
+  workable rather than merely safe. Two removals are refused: the last owner, which would
+  leave the league unadministrable with no way back in short of a redeploy, and yourself,
+  since a co-owner can do it and then the person losing access is not also the person who
+  has to be sure.
 - It belongs here and not in Phase 5 because it is a Setup page feature that wants
   designing alongside the rest of that page. It is **not** the invite flow: no tokens, no
   self-signup, and an added address still receives nothing until they request a sign-in

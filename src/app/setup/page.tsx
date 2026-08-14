@@ -2,13 +2,16 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { NotAnOwner } from '@/components/not-an-owner'
+import { OwnersList } from '@/components/owners-list'
 import { RecipientsList } from '@/components/recipients-list'
 import { SetupForm } from '@/components/setup-form'
+import { Page, PageHeader } from '@/components/ui'
 import {
   ensureLeague,
   findMembership,
   getSettings,
   isFinalised,
+  listOwners,
   listRecipients,
 } from '@/db/queries'
 import { fpl } from '@/lib/fpl/client'
@@ -32,33 +35,48 @@ export default async function SetupPage() {
   if (!membership) return <NotAnOwner />
 
   const roster = buildRoster(standings)
-  const settings = await getSettings(league.id)
+  const [settings, owners, recipientList, finalised] = await Promise.all([
+    getSettings(league.id),
+    listOwners(league.id),
+    listRecipients(league.id),
+    isFinalised(league.id),
+  ])
 
   return (
     <main>
-      <SetupForm
-        leagueId={league.id}
-        leagueName={standings.league.name}
-        fplLeagueId={league.fplLeagueId}
-        initial={settings}
-        gameweekCount={gameweekCount(bootstrap)}
-        managers={roster.map((m) => ({
-          entry: m.entry,
-          entryName: m.entryName,
-          playerName: m.playerName,
-        }))}
-        initialManagerEntry={membership?.managerEntry ?? null}
-        finalised={await isFinalised(league.id)}
-      />
+      <Page>
+        <PageHeader
+          title="League setup"
+          subtitle={
+            <>
+              {standings.league.name} · FPL league {league.fplLeagueId} · {roster.length}{' '}
+              managers · {gameweekCount(bootstrap)} gameweeks
+            </>
+          }
+        />
 
-      <div className="mx-auto w-full max-w-xl p-6 pt-0">
+        <SetupForm
+          leagueId={league.id}
+          initial={settings}
+          gameweekCount={gameweekCount(bootstrap)}
+          managers={roster.map((m) => ({
+            entry: m.entry,
+            entryName: m.entryName,
+            playerName: m.playerName,
+          }))}
+          initialManagerEntry={membership.managerEntry}
+          finalised={finalised}
+        />
+
+        <OwnersList leagueId={league.id} owners={owners} currentUserId={session.user.id} />
+
         <RecipientsList
           leagueId={league.id}
-          initialRecipients={await listRecipients(league.id)}
+          initialRecipients={recipientList}
           initialEmailEnabled={league.emailEnabled}
           managerCount={roster.length}
         />
-      </div>
+      </Page>
     </main>
   )
 }
