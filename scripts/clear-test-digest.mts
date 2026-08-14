@@ -25,6 +25,29 @@ import { deliveries, digests, leagues, messages } from '../src/db/schema'
 import type { DigestStats } from '../src/lib/digest/stats'
 import { REFERENCE_LEAGUE } from '../src/lib/league-config'
 
+/**
+ * Which database is about to be deleted from, without the credentials.
+ *
+ * This script is run against local and production, from the same shell, minutes apart —
+ * `railway run` injects the production environment into a process launched from a
+ * developer machine that also has a local `.env`. Nothing else in the output
+ * distinguishes the two, so "already clean" reads identically whether it means the work
+ * is done or the wrong database was opened. Stating the host makes that a thing you see
+ * rather than a thing you assume.
+ */
+function target(): string {
+  const url = process.env.DATABASE_URL
+  if (!url) return 'DATABASE_URL is not set'
+
+  try {
+    const { hostname, port, pathname } = new URL(url)
+    return `${hostname}${port ? `:${port}` : ''}${pathname}`
+  } catch {
+    // Never echo the URL itself on a parse failure — it carries the password.
+    return 'unparseable DATABASE_URL'
+  }
+}
+
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
   return i === -1 ? undefined : process.argv[i + 1]
@@ -38,6 +61,10 @@ if (!Number.isInteger(gameweek) || gameweek < 1 || gameweek > 60) {
   console.error('Usage: npm run db:clear-digest -- --gw <n> [--confirm] [--force]')
   process.exit(1)
 }
+
+// Printed before anything is read, so every exit path below carries it — including the
+// "already clean" one, which is the exit where knowing the database matters most.
+console.log(`Database:   ${target()}`)
 
 const league = await db.query.leagues.findFirst({
   where: eq(leagues.fplLeagueId, REFERENCE_LEAGUE.fplLeagueId),

@@ -71,10 +71,23 @@ npm run db:clear-digest -- --gw 1              # show what would go
 npm run db:clear-digest -- --gw 1 --confirm    # delete it
 ```
 
-In PowerShell the `--` separator is swallowed by npm, so call node directly:
+In PowerShell the `--` separator is swallowed by npm — it fails with "Workspaces not supported for global packages" without running anything — so call node directly:
 
 ```
 node --env-file-if-exists=.env --import tsx scripts/clear-test-digest.mts --gw 1 --confirm
+```
+
+**Against production**, via Railway, and *without* the `--env-file` flag — `railway run` injects the production environment, and also loading the local `.env` risks the local `DATABASE_URL` winning, which would silently report on the wrong database:
+
+```
+railway run --service fphelp-app node --import tsx scripts/clear-test-digest.mts --gw 1
+```
+
+Every run prints the database it opened as its first line — check it before `--confirm`:
+
+```
+Database:   localhost:5432/fphelp_dev          <- local
+Database:   <something>.railway.internal:5432/railway   <- production
 ```
 
 It refuses a gameweek whose digest contains scored managers, since that is real data rather than a test artifact — `--force` overrides, and should not be needed. Note this catches the **demo** GW5 digest too: demo scores are indistinguishable from real ones, so clearing that one needs `--force`.
