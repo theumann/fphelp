@@ -21,8 +21,8 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
 | Scheduling | Railway cron → token-protected route | Survives restarts; no in-process timer state |
 | Email delivery | Resend, called with `fetch` | No SDK and no React Email: `renderEmail` builds the HTML and its plaintext alternative from `DigestStats` |
 | WhatsApp delivery | Deep link (`whatsapp://send?text=`) | Owner taps; no phone number in the URL |
-| Unit tests | Vitest + recorded API fixtures | The API is unofficial and shifts between seasons |
-| UI tests | Playwright | Owner flows, especially deep-link construction |
+| Unit tests | Vitest + hand-built factories | Recorded fixtures are the goal; nothing real to record until GW1 |
+| UI tests | Playwright, FPL stubbed server-side | Owner flows, especially deep-link construction |
 
 ## Components
 
@@ -340,7 +340,14 @@ This still drives hosting: serverless platforms with rotating shared egress IPs 
 ## Testing strategy
 
 - **Vitest — digest computation.** Highest value, because the logic is pure functions over fetched JSON and the bugs are silent-wrong-number bugs, not crashes. Cover: league average from `event_total` (never `average_entry_score`), rank movement from `last_rank`, GW winner, riser/faller, pagination assembly across `has_next`, `standings ∪ new_entries` roster completeness, prize splits summing to the entered pot. Driven by **recorded fixtures** of real payloads, which double as a change detector against an unofficial API.
-- **Playwright — owner flows.** Setup wizard, dashboard, manual send, and above all the send page. Critical assertion: the WhatsApp href starts with `whatsapp://send?text=` (or `https://wa.me/?text=`), contains **no phone number**, and its decoded payload round-trips to the expected digest within the length budget. Also assert the clipboard fallback. Stub the FPL API via route interception; test the mobile viewport, since that's the only place the deep link is real.
+- **Playwright — owner flows.** Setup wizard, dashboard, manual send, and above all the send page. Critical assertion: the WhatsApp href starts with `whatsapp://send?text=` (or `https://wa.me/?text=`), contains **no phone number**, and its decoded payload round-trips to the expected digest within the length budget. Also assert the clipboard fallback, and test the mobile viewport, since that's the only place the deep link is real.
+
+  **Stubbing is server-side, not route interception.** Every page fetches FPL while rendering, so a browser-level `page.route()` never sees those requests — there is nothing to intercept. `FPL_FIXTURES=1` swaps the client's injected `fetchImpl` instead (`src/lib/fpl/fixtures.ts`), which is also why the fixture league is 18 managers across two pages: a one-page fixture would let a regression in the `has_next` assembly pass.
+
+  Three consequences of the harness worth knowing before extending it, all in `playwright.config.ts` and `e2e/support/`:
+  - **A production build, not `next dev`.** Next 16 permits one dev server per directory, so a suite running `next dev` would fail whenever the developer has theirs up. Output goes to `.next-e2e` so the two never collide.
+  - **Sessions are inserted directly.** Sign-in is a magic link; the suite writes the `sessions` row the adapter would have and sets the cookie. The cost is that **sign-in itself is never exercised** — that needs its own test driving the link end to end.
+  - **The suite truncates every table**, so it refuses any database not named `fphelp_e2e`.
 
 Not testable: whether the owner actually sent the message inside WhatsApp. That's the boundary the delivery-state design accounts for.
 

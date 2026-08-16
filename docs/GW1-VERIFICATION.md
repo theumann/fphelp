@@ -46,6 +46,7 @@ The most interesting moment in the whole season for this app, and it only happen
 
 - [ ] Save real payloads for `bootstrap-static/`, `event-status/`, `leagues-classic/9999999/standings/`, and one `entry/{id}/history` into the test fixtures directory.
 - [ ] These are the basis of the Vitest suite and double as a change detector for next season.
+- [ ] Replace the hand-authored bodies in `src/lib/fpl/fixtures.ts` with the recorded ones. Until then the Playwright suite proves the app renders what it is given, but nothing about whether the shape is right — the two are easy to confuse, and only this step closes the gap. Keep the fixture league larger than one page so the `has_next` assembly stays exercised.
 
 ## 5. Sanity-check the computed stats
 
