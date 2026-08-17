@@ -118,6 +118,12 @@ The underlying reasons, worth keeping even once the script exists:
 
 The scheduler shipped 2026-08-10 (Railway cron, every 40 min). Everything below GW1 is only the **skip** path: pre-season `captureDecision` returns `pre-season` before any per-manager call, so the branch that does the real work has never run against real data.
 
+The service is `cron-capture-history`, not `fphelp-app` — these checks read *its* logs, and the web service's logs will show nothing:
+
+```
+railway logs --service cron-capture-history
+```
+
 - [ ] **The capture branch itself.** Confirm the first post-GW1 run returns `skipped: false` with `rowsSaved > 0`, and that `gameweeksSeen` contains GW1.
 - [ ] **`dropped` and `failed` are empty.** Non-empty `dropped` means `history.current[]` fields didn't match §2 and rows were discarded rather than stored wrong — that is the check firing, not failing, but it needs investigating the same day.
 - [ ] **The gate held.** The capture should happen *after* bonus points settle, not when `finished` first flips. If history lands with pre-bonus scores, `isGameweekReady` is wrong and the composer inherits the same bug.

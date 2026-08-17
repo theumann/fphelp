@@ -292,7 +292,11 @@ Deliberately a job route rather than page-render work: it makes one FPL call per
 
 **Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Schedule `*/40 * * * *` (UTC); the exact cadence doesn't matter much because most runs are no-ops, but see [GW1-VERIFICATION §7](docs/GW1-VERIFICATION.md) — it was inherited from this document rather than measured.
 
-**Cron service configuration**, since it lives in the Railway dashboard rather than the repo. A service separate from the web app, same GitHub repo, no public domain, with:
+**Cron service configuration**, since it lives in the Railway dashboard rather than the repo. The service is **`cron-capture-history`**: separate from the web app (`fphelp-app`), same GitHub repo, no public domain.
+
+Named for the job rather than for the project, which is already the namespace. Phase 3's deadline reminders will be a second scheduled job, and a generic `cron` or `jobs` becomes ambiguous the moment that lands — a per-job name means the dashboard says which one is failing. Nothing resolves this service by name, since the script reaches the app through `APP_URL`, so it can be renamed freely; `fphelp-app` cannot, because its name is baked into the `railway ssh` / `railway logs` commands throughout these docs.
+
+Its configuration:
 
 - **Build command `npm ci`.** Load-bearing. Railpack otherwise detects Next.js and runs `next build`, whose page-data collection imports every route module — including this one, which reaches `src/db/index.ts` where the pool is created at module scope. The build then fails on a missing `DATABASE_URL`, with an error that points at the route rather than at the build command that shouldn't have run.
 - **Start command `npm run job:capture`.** Without it Railpack starts `next start`, which never exits, and Railway skips any cron firing whose previous run is still going — so the job would run exactly once, ever.
