@@ -347,7 +347,7 @@ This still drives hosting: serverless platforms with rotating shared egress IPs 
   Three consequences of the harness worth knowing before extending it, all in `playwright.config.ts` and `e2e/support/`:
   - **A production build, not `next dev`.** Next 16 permits one dev server per directory, so a suite running `next dev` would fail whenever the developer has theirs up. Output goes to `.next-e2e` so the two never collide.
   - **Sessions are inserted directly.** Sign-in is a magic link; the suite writes the `sessions` row the adapter would have and sets the cookie. The cost is that **sign-in itself is never exercised** — that needs its own test driving the link end to end.
-  - **The suite truncates every table**, so it refuses any database not named `fphelp_e2e`.
+  - **The suite truncates every table**, so `e2e/support/db-url.ts` refuses any database that is not named `fphelp_e2e` *and* on a local host. Two conditions, because the name alone would admit a remote database that happened to match, and this is destructive work on data — `digests` and `sent_text` hold the owner's own writing and cannot be recovered from the API. No override: an escape hatch on this guard is the kind that gets set once and then lives in a shell profile.
 
 Not testable: whether the owner actually sent the message inside WhatsApp. That's the boundary the delivery-state design accounts for.
 

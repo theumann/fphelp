@@ -12,19 +12,23 @@ import { execSync } from 'node:child_process'
 
 import { Client } from 'pg'
 
-const url = process.env.DATABASE_URL
-if (!url) {
-  console.error('DATABASE_URL is not set. Copy .env.e2e.example to .env.e2e first.')
+import { checkE2eDatabaseUrl } from '../e2e/support/db-url'
+
+/**
+ * The same guard the suite itself uses, rather than a second copy that could drift.
+ * This script runs migrations, so pointing it at the wrong database is a schema change
+ * somewhere it was not wanted.
+ */
+let checked: ReturnType<typeof checkE2eDatabaseUrl>
+try {
+  checked = checkE2eDatabaseUrl(process.env.DATABASE_URL)
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err))
   process.exit(1)
 }
 
-const parsed = new URL(url)
-const dbName = parsed.pathname.replace(/^\//, '')
-
-if (dbName !== 'fphelp_e2e') {
-  console.error(`Refusing to prepare "${dbName}" — the e2e database must be fphelp_e2e.`)
-  process.exit(1)
-}
+const parsed = new URL(checked.url)
+const dbName = checked.database
 
 // Connect to the maintenance database to issue CREATE DATABASE, which cannot run
 // inside the database it creates.

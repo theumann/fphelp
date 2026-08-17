@@ -4,6 +4,8 @@ import { Pool } from 'pg'
 
 import { FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME } from '../../src/lib/fpl/fixtures'
 
+import { checkE2eDatabaseUrl } from './db-url'
+
 /**
  * Direct database access for tests, deliberately not going through `src/db`.
  *
@@ -16,30 +18,13 @@ import { FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME } from '../../src/lib/fpl/fixtur
 export const OWNER_EMAIL = 'owner@example.test'
 export const CO_OWNER_EMAIL = 'co-owner@example.test'
 
-function url(): string {
-  const value = process.env.DATABASE_URL
-  if (!value) throw new Error('DATABASE_URL is not set for the e2e suite')
-
-  /**
-   * The guard that makes the rest of this file safe to run.
-   *
-   * Everything below truncates tables. Pointed at the wrong database it would delete a
-   * real league's digests and dues, and the owner's own writing is not reproducible from
-   * the API. So the suite refuses any database whose name does not say it is the test
-   * one, rather than trusting whatever `.env` happens to hold.
-   */
-  if (!/\/fphelp_e2e(\?|$)/.test(value)) {
-    throw new Error(
-      `Refusing to run the e2e suite against "${value.replace(/:[^:@]*@/, ':***@')}". ` +
-        'The database name must be `fphelp_e2e` — these tests truncate every table.',
-    )
-  }
-
-  return value
-}
-
+/**
+ * Every pool in the suite comes from here, so the guard cannot be sidestepped by
+ * connecting somewhere else. See `db-url.ts` for what it refuses and why.
+ */
 export function pool(): Pool {
-  return new Pool({ connectionString: url() })
+  const { url } = checkE2eDatabaseUrl(process.env.DATABASE_URL)
+  return new Pool({ connectionString: url })
 }
 
 /**

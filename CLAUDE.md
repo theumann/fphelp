@@ -30,7 +30,7 @@ Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects")
 
 - Digest computation is **pure functions over fetched JSON**. Keep fetching, computing, and rendering separate; the computation layer is where the tests live.
 - FPL API responses are captured as **recorded fixtures** for tests. The API is unofficial and shifts between seasons — fixtures double as a change detector. **Not yet true:** no real payload has been recorded, because the collections are empty pre-season. Vitest uses hand-built factories and Playwright uses hand-authored fixtures in `src/lib/fpl/fixtures.ts`; both prove the app renders what it is given, never that the shape is right. [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §4 records the real ones.
-- **End-to-end tests never call the real FPL API.** `FPL_FIXTURES=1` swaps the client's `fetchImpl` for a canned one. The suite also truncates every table, so it refuses any database not named `fphelp_e2e`.
+- **End-to-end tests never call the real FPL API.** `FPL_FIXTURES=1` swaps the client's `fetchImpl` for a canned one. The suite also truncates every table, so it refuses any database that is not named `fphelp_e2e` **and** on a local host — the name alone would let a remote database with the right name through, and there is deliberately no override.
 - One template renders both the HTML email and the plaintext WhatsApp payload.
 
 - **"Manager" means an FPL entry** competing in the league (`managers` table). A person who logs in here is an **owner** (`users` + `league_users`). Don't conflate them.
