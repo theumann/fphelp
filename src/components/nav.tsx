@@ -43,38 +43,47 @@ export function Nav({ who }: { who?: string | null }) {
 
   return (
     <nav className="border-b border-line bg-surface">
-      <div className="mx-auto flex w-full max-w-xl items-center gap-1 p-2">
-        {/* Hidden on narrow screens: on a phone the three destinations matter more than
-            the mark, and the app is only ever reached by someone who knows what it is. */}
-        <Link href="/send" className="mr-1 hidden shrink-0 sm:block" aria-label="FPheLp">
-          <Logo width={72} />
+      {/**
+       * Three columns rather than a flex row: `1fr auto 1fr` centres the mark against the
+       * bar itself, not against whatever the two sides happen to weigh, so the logo does
+       * not drift as the signed-in address changes length or a link becomes active.
+       */}
+      <div className="mx-auto grid w-full max-w-xl grid-cols-[1fr_auto_1fr] items-center gap-1 p-2">
+        <div className="flex items-center gap-1">
+          {LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              aria-current={pathname === href ? 'page' : undefined}
+              className={`rounded-lg px-2.5 py-2 text-sm transition-colors sm:px-3 ${
+                pathname === href
+                  ? 'bg-accent font-medium text-accent-foreground'
+                  : 'text-muted hover:bg-surface-muted hover:text-foreground'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+
+        <Link href="/send" className="justify-self-center px-1" aria-label="FPheLp">
+          {/* `h-auto` is required with the CSS width override, or next/image keeps the
+              intrinsic height attribute and the mark is squashed. */}
+          <Logo width={68} className="h-auto w-14 sm:w-[68px]" />
         </Link>
 
-        {LINKS.map(({ href, label }) => (
-          <Link
-            key={href}
-            href={href}
-            aria-current={pathname === href ? 'page' : undefined}
-            className={`rounded-lg px-3 py-2 text-sm transition-colors ${
-              pathname === href
-                ? 'bg-accent font-medium text-accent-foreground'
-                : 'text-muted hover:bg-surface-muted hover:text-foreground'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
-
-        {who ? (
-          <form action={signOutAction} className="ml-auto flex items-center gap-2">
-            {/* Hidden on narrow screens: the phone is the primary device and the nav
-                links must not wrap to make room for an address. */}
-            <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline">
-              {who}
-            </span>
-            <SignOutButton />
-          </form>
-        ) : null}
+        <div className="flex items-center justify-end">
+          {who ? (
+            <form action={signOutAction} className="flex items-center gap-2">
+              {/* Hidden on narrow screens: the phone is the primary device, and the centre
+                  column has to stay centred rather than be pushed off by an address. */}
+              <span className="hidden max-w-[16ch] truncate text-xs text-muted sm:inline">
+                {who}
+              </span>
+              <SignOutButton />
+            </form>
+          ) : null}
+        </div>
       </div>
     </nav>
   )

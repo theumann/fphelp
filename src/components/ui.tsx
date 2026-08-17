@@ -107,17 +107,13 @@ export function Button({
   ...props
 }: ComponentProps<'button'> & { variant?: ButtonVariant; size?: 'sm' | 'md' }) {
   const sizing = size === 'sm' ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2.5 text-sm'
-  /**
-   * `cursor-pointer` is explicit because Tailwind v4 dropped the Preflight rule that gave
-   * `<button>` a pointer cursor, so every button in the app lost it at once when the
-   * framework was adopted. Setting it here fixes the whole app rather than one button at
-   * a time — which is most of why these primitives exist.
-   */
+  // The pointer cursor is restored globally in globals.css, since hand-rolled buttons need
+  // it too. Only the disabled case is the primitive's business.
   return (
     <button
       type="button"
       {...props}
-      className={`cursor-pointer rounded-lg font-medium transition-opacity transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${VARIANTS[variant]} ${sizing} ${className}`}
+      className={`rounded-lg font-medium transition-opacity transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${VARIANTS[variant]} ${sizing} ${className}`}
     />
   )
 }

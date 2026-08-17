@@ -53,5 +53,5 @@ next-env.d.ts
 .claude/settings.local.json
 /.next-e2e/
 
-# Playwright screenshot output
-/test-results/screens/
+# Playwright screenshot output (npm run e2e:screens)
+/screenshots/

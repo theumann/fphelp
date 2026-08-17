@@ -95,6 +95,26 @@ body {
 }
 
 /**
+ * Restores the pointer cursor on buttons.
+ *
+ * Tailwind v4 dropped this from Preflight, so every `<button>` in the app lost it at once
+ * when the framework was adopted — including hand-rolled ones that never go through the
+ * `Button` primitive, which is why fixing it there only covered some of them. Done globally
+ * so the next hand-rolled button is right without anyone remembering.
+ *
+ * `:not(:disabled)` because a disabled control should not advertise itself as clickable;
+ * the primitive gives those `cursor-not-allowed`.
+ *
+ * Native spinners on `<input type="number">` are deliberately left alone — they keep the
+ * browser's own cursor, as every other native control does.
+ */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+summary {
+  cursor: pointer;
+}
+
+/**
  * A visible focus ring on every interactive element, keyboard-only.
  *
  * Set globally because it is the accessibility property most likely to be forgotten one

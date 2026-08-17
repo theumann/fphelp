@@ -28,5 +28,5 @@ test('send page', async ({ page, db }) => {
   const league = await seedLeague(db)
   await useSession(page, league.sessionToken)
   await page.goto('/send')
-  await page.screenshot({ path: 'test-results/screens/send-iphone.png' })
+  await page.screenshot({ path: 'screenshots/send-iphone.png' })
 })
