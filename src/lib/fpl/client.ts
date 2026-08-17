@@ -1,3 +1,4 @@
+import { fixtureFetch, fplFixturesEnabled } from './fixtures'
 import type {
   BootstrapStatic,
   ClassicLeagueEntry,
@@ -155,4 +156,29 @@ export class FplClient {
   }
 }
 
-export const fpl = new FplClient()
+/**
+ * The shared client.
+ *
+ * Serves canned responses instead of the real API when `FPL_FIXTURES=1`, which is how the
+ * Playwright suite gets a renderable league without calling FPL. The branch lives here,
+ * in production code, because every page fetches server-side — there is no seam in the
+ * browser for a test to intercept, and aliasing the module at build time would mean the
+ * suite exercised a different import graph than production does.
+ *
+ * The variable is set only by `playwright.config.ts` and never in Railway. Activation is
+ * announced on stderr: a fake API quietly standing in for a real league, on a deployment
+ * that sends messages to actual people, is worse than a crash.
+ */
+function createClient(): FplClient {
+  if (!fplFixturesEnabled()) return new FplClient()
+
+  console.warn(
+    '[fpl] FPL_FIXTURES=1 — serving canned fixtures, NOT the real FPL API. ' +
+      'Never set this in production.',
+  )
+  // No retries: a fixture miss is a bug in the fixture, and backing off three times
+  // before reporting it only makes the suite slower to tell you.
+  return new FplClient({ fetchImpl: fixtureFetch, maxRetries: 0 })
+}
+
+export const fpl = createClient()

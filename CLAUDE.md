@@ -8,7 +8,7 @@ See [ROADMAP.md](./ROADMAP.md) for scope and [ARCHITECTURE.md](./ARCHITECTURE.md
 
 ## Stack
 
-TypeScript / Node 24, **Next.js 16.3 (App Router) + React 19.2**, Postgres + Drizzle on Railway, Resend for email, Vitest. Playwright is intended but **not installed yet** — there is no end-to-end coverage today.
+TypeScript / Node 24, **Next.js 16.3 (App Router) + React 19.2**, Postgres + Drizzle on Railway, Resend for email, Vitest + Playwright.
 
 UI is Tailwind v4 over the design tokens in `src/app/globals.css`, used through the shared primitives in `src/components/ui.tsx`. Components should not reach for raw palette classes (`neutral-300`, `dark:neutral-700`): those were duplicated across every file and made dark mode something each one re-derived by hand.
 
@@ -20,13 +20,17 @@ UI is Tailwind v4 over the design tokens in `src/app/globals.css`, used through 
 - `npm run build` / `npm start` — production build and serve
 - `npm run lint` — ESLint
 - `npm run db:clear-digest -- --gw N` — deletes one gameweek's digest, messages and deliveries for the reference league. Dry run without `--confirm`. Manual only, never a deploy hook — it removes the owner's own writing. See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §6b.
+- `npm test` — Vitest, the pure computation layer
+- `npm run e2e:db` — creates and migrates `fphelp_e2e`. Run once, and again when migrations change
+- `npm run e2e` — Playwright. Builds the app into `.next-e2e` and serves it, so it does not disturb a `next dev` you have running
 
 Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects").
 
 ## Conventions
 
 - Digest computation is **pure functions over fetched JSON**. Keep fetching, computing, and rendering separate; the computation layer is where the tests live.
-- FPL API responses are captured as **recorded fixtures** for tests. The API is unofficial and shifts between seasons — fixtures double as a change detector.
+- FPL API responses are captured as **recorded fixtures** for tests. The API is unofficial and shifts between seasons — fixtures double as a change detector. **Not yet true:** no real payload has been recorded, because the collections are empty pre-season. Vitest uses hand-built factories and Playwright uses hand-authored fixtures in `src/lib/fpl/fixtures.ts`; both prove the app renders what it is given, never that the shape is right. [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §4 records the real ones.
+- **End-to-end tests never call the real FPL API.** `FPL_FIXTURES=1` swaps the client's `fetchImpl` for a canned one. The suite also truncates every table, so it refuses any database that is not named `fphelp_e2e` **and** on a local host — the name alone would let a remote database with the right name through, and there is deliberately no override.
 - One template renders both the HTML email and the plaintext WhatsApp payload.
 
 - **"Manager" means an FPL entry** competing in the league (`managers` table). A person who logs in here is an **owner** (`users` + `league_users`). Don't conflate them.

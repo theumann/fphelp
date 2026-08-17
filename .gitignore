@@ -34,6 +34,13 @@ yarn-error.log*
 .env*
 # ...which the template is the point of. It holds no secrets, only variable names.
 !.env.example
+!.env.e2e.example
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/
 
 # vercel
 .vercel
@@ -44,3 +51,4 @@ next-env.d.ts
 
 # Claude Code local settings
 .claude/settings.local.json
+/.next-e2e/
