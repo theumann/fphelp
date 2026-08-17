@@ -26,6 +26,12 @@ process.loadEnvFile?.('.env.e2e')
 
 export default defineConfig({
   testDir: './e2e',
+  /**
+   * Screenshots are a tool for looking at the app, not a check — they assert nothing, so
+   * running them on every `npm run e2e` would only add time and a directory of images
+   * nobody opens. `npm run e2e:screens` runs them through their own config.
+   */
+  testIgnore: ['**/screenshots*.spec.ts'],
   // Every test truncates the shared database, so they cannot run concurrently. Correct
   // before fast: parallelism here would make failures depend on timing.
   workers: 1,

@@ -107,6 +107,8 @@ export function Button({
   ...props
 }: ComponentProps<'button'> & { variant?: ButtonVariant; size?: 'sm' | 'md' }) {
   const sizing = size === 'sm' ? 'px-2.5 py-1.5 text-sm' : 'px-4 py-2.5 text-sm'
+  // The pointer cursor is restored globally in globals.css, since hand-rolled buttons need
+  // it too. Only the disabled case is the primitive's business.
   return (
     <button
       type="button"

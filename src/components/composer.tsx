@@ -149,7 +149,9 @@ export function Composer({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 p-4 pb-28">
+    // Bottom padding clears the fixed send bar *and* the home indicator behind it —
+    // otherwise the last control scrolls to a position it can never be tapped in.
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-5 p-4 pb-[calc(8rem+env(safe-area-inset-bottom))]">
       <header>
         <h1 className="text-xl font-semibold">{leagueName}</h1>
         <p className="text-sm text-neutral-500">
@@ -291,28 +293,36 @@ export function Composer({
         </pre>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/95 p-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95">
+      {/**
+       * The send bar.
+       *
+       * `pb-[env(safe-area-inset-bottom)]` is not cosmetic: without it the bar sits under
+       * the iPhone home indicator, and the primary action of the whole app is partly
+       * untappable on the device it was designed for. It pairs with `viewportFit: 'cover'`
+       * in the layout — the inset is always 0px without it.
+       */}
+      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-background/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
         <div className="mx-auto flex w-full max-w-xl gap-2">
           {/* No phone number in either form — a number opens an individual chat and
               makes the league group unreachable. */}
           <a
             href={links.app}
             onClick={() => setTappedSend(true)}
-            className="flex-1 rounded-lg bg-green-600 px-4 py-3 text-center text-base font-medium text-white active:bg-green-700"
+            className="flex-1 cursor-pointer rounded-lg bg-[#25D366] px-4 py-3 text-center text-base font-semibold text-[#0b3d24] transition-opacity active:opacity-80"
           >
             Send to WhatsApp
           </a>
           <button
             type="button"
             onClick={copy}
-            className="rounded-lg border border-neutral-300 px-4 py-3 text-base font-medium dark:border-neutral-700"
+            className="cursor-pointer rounded-lg border border-line-strong px-4 py-3 text-base font-medium transition-colors hover:bg-surface-muted"
           >
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
-        <p className="mt-2 text-center text-xs text-neutral-500">
+        <p className="mt-2 text-center text-xs text-muted">
           Button not working?{' '}
-          <a href={links.web} className="underline">
+          <a href={links.web} className="cursor-pointer underline">
             Open via wa.me
           </a>
         </p>
