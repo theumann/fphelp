@@ -67,7 +67,7 @@ export default async function SignInPage({
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-6">
-      <div className="flex flex-col items-start gap-3">
+      <div className="flex flex-col items-center gap-3 text-center">
         {/* The wordmark instead of a text heading — this is the app's first screen. */}
         <Logo width={200} priority />
         <p className="text-sm text-muted">Sign in with your email — no password.</p>
