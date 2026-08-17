@@ -44,11 +44,19 @@ export function Nav({ who }: { who?: string | null }) {
   return (
     <nav className="border-b border-line bg-surface">
       {/**
-       * Three columns rather than a flex row: `1fr auto 1fr` centres the mark against the
-       * bar itself, not against whatever the two sides happen to weigh, so the logo does
-       * not drift as the signed-in address changes length or a link becomes active.
+       * The mark is centred in the space *between* the two groups, not against the bar.
+       *
+       * So its position depends on what flanks it, and it shifts at the `sm` breakpoint
+       * where the signed-in address appears. That is accepted deliberately: centring on
+       * the gap keeps equal breathing room on both sides at every width, which is what
+       * actually reads as deliberate, whereas centring on the bar looks off whenever the
+       * two sides differ — which on a phone is always.
+       *
+       * Flow layout rather than absolute positioning, so the groups push the mark instead
+       * of it overlapping them. At 390px the three links are wider than half the bar, and
+       * an absolutely centred mark would sit on top of "Setup".
        */}
-      <div className="mx-auto grid w-full max-w-xl grid-cols-[1fr_auto_1fr] items-center gap-1 p-2">
+      <div className="mx-auto flex w-full max-w-xl items-center gap-1 p-2">
         <div className="flex items-center gap-1">
           {LINKS.map(({ href, label }) => (
             <Link
@@ -66,13 +74,17 @@ export function Nav({ who }: { who?: string | null }) {
           ))}
         </div>
 
-        <Link href="/send" className="justify-self-center px-1" aria-label="FPheLp">
-          {/* `h-auto` is required with the CSS width override, or next/image keeps the
-              intrinsic height attribute and the mark is squashed. */}
-          <Logo width={68} className="h-auto w-14 sm:w-[68px]" />
-        </Link>
+        {/* `min-w-0` lets this column give way before the links do when space runs out;
+            `shrink-0` on the mark keeps it from being squeezed narrower than itself. */}
+        <div className="flex min-w-0 flex-1 justify-center">
+          <Link href="/send" className="shrink-0 px-1" aria-label="FPheLp">
+            {/* `h-auto` is required with the CSS width override, or next/image keeps the
+                intrinsic height attribute and the mark is squashed. */}
+            <Logo width={68} className="h-auto w-14 sm:w-[68px]" />
+          </Link>
+        </div>
 
-        <div className="flex items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end">
           {who ? (
             <form action={signOutAction} className="flex items-center gap-2">
               {/* Hidden on narrow screens: the phone is the primary device, and the centre
