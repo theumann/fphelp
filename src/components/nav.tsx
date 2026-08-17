@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
 
 import { signOutAction } from '@/app/auth-actions'
+import { Logo } from '@/components/logo'
 
 const LINKS = [
   { href: '/send', label: 'Compose' },
@@ -43,6 +44,12 @@ export function Nav({ who }: { who?: string | null }) {
   return (
     <nav className="border-b border-line bg-surface">
       <div className="mx-auto flex w-full max-w-xl items-center gap-1 p-2">
+        {/* Hidden on narrow screens: on a phone the three destinations matter more than
+            the mark, and the app is only ever reached by someone who knows what it is. */}
+        <Link href="/send" className="mr-1 hidden shrink-0 sm:block" aria-label="FPheLp">
+          <Logo width={72} />
+        </Link>
+
         {LINKS.map(({ href, label }) => (
           <Link
             key={href}

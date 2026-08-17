@@ -118,8 +118,14 @@ which is where the one committed feature below lives.
 
 **Landed so far.** Design tokens in `globals.css` (every colour named once, dark mode
 defined in one place) and a small set of shared primitives in `src/components/ui.tsx` —
-`Card`, `Field`, `Button`, `Alert`. Setup, the nav and the not-an-owner screen use them;
-`/send` and `/dues` do not yet. Setup also resolved a split that ran through the page: the
+`Card`, `Field`, `Button`, `Alert`. Setup, the nav, sign-in and the not-an-owner screen use
+them; `/send` and `/dues` do not yet.
+
+The landing page was create-next-app boilerplate until 2026-08-17 — live, at the site root,
+telling visitors to edit `page.tsx`. It is now the logo, a sentence and a sign-in link, and
+a signed-in owner is redirected to the composer instead. The logo is wired in with a
+dark-mode variant (its "he" and tagline are dark indigo and vanished on the dark theme) and
+a favicon cropped to the "FP" monogram, since a 3:1 wordmark is unreadable at 32px. Setup also resolved a split that ran through the page: the
 settings form batches behind a Save button while the lists write on every click, so the
 form now carries a sticky bar that says whether anything is unsaved rather than leaving
 the two models to be inferred.
