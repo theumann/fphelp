@@ -58,6 +58,8 @@ export function Composer({
   const [tappedSend, setTappedSend] = useState(false)
   const [marking, setMarking] = useState(false)
   const messageIdRef = useRef(persistence?.messageId)
+  /** The block selection as last written, so a re-render cannot re-save an unchanged one. */
+  const savedBlocksRef = useRef(persistence?.initialBlocks)
 
   // composeMessage is a pure function, so toggling a block re-renders from the same
   // stored stats — no refetch.
@@ -88,17 +90,31 @@ export function Composer({
     }
   }, [persistence, body, blocks])
 
-  // Debounced autosave. The draft is shared between co-owners, so leaving it only in
-  // local state would let two people write the same week's update independently.
+  /**
+   * Autosave. The draft is shared between co-owners, so leaving it only in local state
+   * would let two people write the same week's update independently.
+   *
+   * Typing is debounced; a checkbox is not. Both used to wait 800ms, which meant toggling
+   * a block and navigating away immediately lost the change — and since a block toggle is
+   * one deliberate click rather than a stream of keystrokes, there is nothing to debounce.
+   */
   useEffect(() => {
     if (!persistence) return
-    // Reference comparison is deliberate: `blocks` is only replaced when the owner
-    // toggles something, so an untouched form skips the initial save.
-    if (body === persistence.initialBody && blocks === persistence.initialBlocks) return
+    if (body === persistence.initialBody) return
 
     const timer = setTimeout(save, 800)
     return () => clearTimeout(timer)
-  }, [body, blocks, persistence, save])
+  }, [body, persistence, save])
+
+  useEffect(() => {
+    if (!persistence) return
+    // Compared against what was last written, not against the initial value: `save` changes
+    // identity on every keystroke, so re-running this effect must not re-save the blocks.
+    if (blocks === savedBlocksRef.current) return
+
+    savedBlocksRef.current = blocks
+    save()
+  }, [blocks, persistence, save])
 
   async function copy() {
     try {

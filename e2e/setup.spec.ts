@@ -151,13 +151,13 @@ test.describe('email recipients', () => {
     await expect(ownerPage.getByText(/sends by WhatsApp only/)).toBeVisible()
     await expect(ownerPage.getByLabel('Add addresses')).toBeHidden()
 
-    await ownerPage.getByRole('checkbox').check()
+    await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
     await expect(ownerPage.getByLabel('Add addresses')).toBeVisible()
   })
 
   test('a pasted list reports what it could not read', async ({ ownerPage }) => {
     await ownerPage.goto('/setup')
-    await ownerPage.getByRole('checkbox').check()
+    await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
 
     await ownerPage
       .getByLabel('Add addresses')

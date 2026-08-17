@@ -409,6 +409,17 @@ export async function removeRecipient(leagueId: string, id: string) {
   await db.delete(recipients).where(and(eq(recipients.leagueId, leagueId), eq(recipients.id, id)))
 }
 
+/**
+ * The league's default block selection — what a new draft starts with.
+ *
+ * A default, not a setting that applies retroactively: `messages.blocks` records what each
+ * message actually included, so changing this never rewrites what the league was already
+ * sent. That separation is the whole reason both exist.
+ */
+export async function setDefaultBlocks(leagueId: string, blocks: BlockSelection) {
+  await db.update(leagues).set({ defaultBlocks: blocks }).where(eq(leagues.id, leagueId))
+}
+
 /** Email is opt-in per league: a WhatsApp-only league never touches the recipient list. */
 export async function setEmailEnabled(leagueId: string, enabled: boolean) {
   await db.update(leagues).set({ emailEnabled: enabled }).where(eq(leagues.id, leagueId))

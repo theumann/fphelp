@@ -78,14 +78,17 @@ export function RecipientsList({
       hint="Optional. WhatsApp needs no addresses — email does, and only you can supply them."
       aside={
         <label className="flex cursor-pointer items-center gap-2">
+          {/* Labelled explicitly: the visible text is the *state*, so without this the
+              control announces itself as "Off", which says nothing about what it does. */}
           <input
             type="checkbox"
+            aria-label="Send this league's digest by email"
             checked={enabled}
             disabled={pending}
             onChange={(e) => toggle(e.target.checked)}
             className="size-4 accent-accent"
           />
-          <span>{enabled ? 'On' : 'Off'}</span>
+          <span aria-hidden>{enabled ? 'On' : 'Off'}</span>
         </label>
       }
     >
