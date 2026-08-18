@@ -12,11 +12,13 @@ import {
   removeOwner,
   removeRecipient,
   saveSettings,
+  setDefaultBlocks,
   setEmailEnabled,
   setManagerEntry,
 } from '@/db/queries'
 import { parseRecipient, parseRecipientList } from '@/lib/email/recipients'
 import { validateSettings, type LeagueSettings } from '@/lib/league-settings'
+import type { BlockSelection } from '@/lib/render/blocks'
 
 export interface SaveSettingsResult {
   ok: boolean
@@ -103,6 +105,26 @@ export async function removeRecipientAction(input: { leagueId: string; id: strin
 
   await removeRecipient(input.leagueId, input.id)
   revalidatePath('/setup')
+}
+
+/**
+ * Sets which blocks a new draft starts with.
+ *
+ * Saves on each toggle rather than behind the settings form's Save button, because it is a
+ * discrete choice like the email switch, not part of the prize arithmetic that has to be
+ * validated as a whole.
+ */
+export async function setDefaultBlocksAction(input: {
+  leagueId: string
+  blocks: BlockSelection
+}) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('Not signed in')
+  await assertOwner(input.leagueId, session.user.id)
+
+  await setDefaultBlocks(input.leagueId, input.blocks)
+  revalidatePath('/setup')
+  revalidatePath('/send')
 }
 
 /** Email is opt-in per league; a WhatsApp-only league never maintains a list. */

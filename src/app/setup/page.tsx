@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
+import { DefaultBlocks } from '@/components/default-blocks'
 import { NotAnOwner } from '@/components/not-an-owner'
 import { OwnersList } from '@/components/owners-list'
 import { RecipientsList } from '@/components/recipients-list'
@@ -67,6 +68,8 @@ export default async function SetupPage() {
           initialManagerEntry={membership.managerEntry}
           finalised={finalised}
         />
+
+        <DefaultBlocks leagueId={league.id} initial={league.defaultBlocks} />
 
         <OwnersList leagueId={league.id} owners={owners} currentUserId={session.user.id} />
 

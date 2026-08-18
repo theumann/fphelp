@@ -25,6 +25,7 @@ import {
 import { buildRoster } from '@/lib/fpl/roster'
 import { REFERENCE_LEAGUE } from '@/lib/league-config'
 import { DEFAULT_SETTINGS, summarise } from '@/lib/league-settings'
+import type { BlockSelection } from '@/lib/render/blocks'
 
 // Live FPL data — never serve a cached table as this week's result.
 export const dynamic = 'force-dynamic'
@@ -133,7 +134,15 @@ export default async function SendPage({
   const gameweek = demo ? 5 : (finished ?? 1)
   const stats = computeDigestStats(roster, gameweek)
 
-  const defaultBlocks = { overallStandings: true, gwResults: true, prizeStructure: false }
+  /**
+   * Only reached in demo mode, which has no league row to read defaults from. A real
+   * league's defaults come from `leagues.default_blocks` below.
+   */
+  let defaultBlocks: BlockSelection = {
+    overallStandings: true,
+    gwResults: true,
+    prizeStructure: false,
+  }
 
   // Demo mode persists nothing — it exists to test message length, not to write
   // synthetic rows into the real league's history.
@@ -154,6 +163,13 @@ export default async function SendPage({
     // the others. The Server Actions behind it already call assertOwner — this stops a
     // non-owner reading the draft, which those cannot.
     if (!(await findMembership(league.id, session.user.id))) return <NotAnOwner />
+
+    /**
+     * The league's own defaults, which is what a new draft starts from and what both
+     * panels fall back to. Previously hardcoded here, so the column existed, Setup had no
+     * way to change it, and every owner got the same three choices whatever they wanted.
+     */
+    defaultBlocks = league.defaultBlocks
 
     const digest = await upsertDigest(league.id, gameweek, stats)
     const draft = await findDraft(league.id, gameweek)
