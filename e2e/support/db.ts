@@ -65,7 +65,15 @@ export interface SeededLeague {
  */
 export async function seedLeague(
   p: Pool,
-  opts: { email?: string; name?: string; managerEntry?: number | null } = {},
+  opts: {
+    email?: string
+    name?: string
+    managerEntry?: number | null
+    /** Turns the league's email channel on, which is what makes /send show its tabs. */
+    emailEnabled?: boolean
+    /** Addresses on the recipient list. The send button names how many there are. */
+    recipients?: string[]
+  } = {},
 ): Promise<SeededLeague> {
   const email = opts.email ?? OWNER_EMAIL
 
@@ -76,10 +84,14 @@ export async function seedLeague(
   const ownerId = users[0].id
 
   const { rows: leagues } = await p.query<{ id: string }>(
-    `INSERT INTO leagues (fpl_league_id, name) VALUES ($1, $2) RETURNING id`,
-    [FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME],
+    `INSERT INTO leagues (fpl_league_id, name, email_enabled) VALUES ($1, $2, $3) RETURNING id`,
+    [FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME, opts.emailEnabled ?? false],
   )
   const leagueId = leagues[0].id
+
+  for (const address of opts.recipients ?? []) {
+    await p.query(`INSERT INTO recipients (league_id, email) VALUES ($1, $2)`, [leagueId, address])
+  }
 
   await p.query(
     `INSERT INTO league_users (league_id, user_id, manager_entry) VALUES ($1, $2, $3)`,

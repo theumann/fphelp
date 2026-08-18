@@ -1,4 +1,5 @@
-import { expect, test } from './support/test'
+import { seedLeague } from './support/db'
+import { expect, test, useSession } from './support/test'
 
 /**
  * The composer's block selection.
@@ -50,4 +51,60 @@ test('the league default decides what a new draft starts with', async ({ ownerPa
   // which is the part Setup owns.
   await ownerPage.goto('/setup')
   await expect(defaults.getByRole('checkbox', PRIZES)).toBeChecked()
+})
+
+/**
+ * The channel tabs.
+ *
+ * `seedLeague` leaves email off by default, matching a WhatsApp-only league, so these
+ * seed their own league with it switched on rather than relying on the shared fixture.
+ */
+test.describe('channel tabs', () => {
+  test('a WhatsApp-only league sees no tabs at all', async ({ ownerPage }) => {
+    await ownerPage.goto('/send')
+
+    await expect(ownerPage.getByRole('tablist')).toHaveCount(0)
+    await expect(ownerPage.getByRole('link', { name: 'Send to WhatsApp' })).toBeVisible()
+  })
+
+  test('email leads, and the bottom action follows the tab', async ({ page, db }) => {
+    const league = await seedLeague(db, {
+      emailEnabled: true,
+      recipients: ['steve@example.test', 'victor@example.test'],
+    })
+    await useSession(page, league.sessionToken)
+    await page.goto('/send')
+
+    // Email is selected on arrival, and its action names the recipient count — the
+    // safeguard against the one irreversible button in the app.
+    await expect(page.getByRole('tab', { name: 'Email' })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByRole('button', { name: 'Send email to 2' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Send to WhatsApp' })).toHaveCount(0)
+
+    await page.getByRole('tab', { name: 'WhatsApp' }).click()
+    await expect(page.getByRole('link', { name: 'Send to WhatsApp' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Send email to/ })).toHaveCount(0)
+  })
+
+  test('the send button refuses a league with no addresses', async ({ page, db }) => {
+    const league = await seedLeague(db, { emailEnabled: true })
+    await useSession(page, league.sessionToken)
+    await page.goto('/send')
+
+    await expect(page.getByRole('button', { name: 'No recipients yet' })).toBeDisabled()
+  })
+
+  test('the length budget stays visible from the email tab', async ({ page, db }) => {
+    const league = await seedLeague(db, { emailEnabled: true, recipients: ['a@example.test'] })
+    await useSession(page, league.sessionToken)
+    await page.goto('/send')
+
+    const whatsappTab = page.getByRole('tab', { name: /WhatsApp/ })
+    await expect(whatsappTab).not.toContainText('over the length budget')
+
+    // The budget is a WhatsApp constraint and its meter lives on that tab, so going over
+    // while composing in email has to be visible from here or it is invisible entirely.
+    await page.getByRole('textbox', { name: 'Your message' }).fill('x'.repeat(1600))
+    await expect(whatsappTab).toContainText('over the length budget')
+  })
 })

@@ -79,7 +79,7 @@ Each feature is annotated with its data source. "Free" means it needs no call be
     - league average — **computed** as the mean of `event_total` across results
   - Roster completeness: managers in `new_entries[]` do not appear in standings until the next GW is processed, and must still show up
 - **Composer** — pre-filled draft the owner edits freely, with per-message checkboxes for the generated blocks (defaults from league settings) and a live character budget
-- **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent"
+- **Send page (mobile)** — composed message, "Send to WhatsApp" deep link, "Copy text" fallback, optional "Mark as sent". The two channels are **tabs** over one shared piece of prose, with email leading when the league has it on: it is the channel that sends from here, while WhatsApp needs the owner's thumb regardless. Each tab owns the bottom bar's primary action, so email's names its recipient count rather than saying "Send" — it is the one button in the app that cannot be taken back
 - **Email digest** — same composed message, HTML. **Opt-in**, and requires the owner to enter a recipient list first (see Delivery model). Deferrable within Phase 1 if WhatsApp lands first
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
   - ✅ **Built** as `POST /api/jobs/capture-history`, guarded by a `JOBS_TOKEN` bearer token. It also upserts `managers`, which is the only record of who was in the league at a given time.
@@ -118,8 +118,8 @@ which is where the one committed feature below lives.
 
 **Landed so far.** Design tokens in `globals.css` (every colour named once, dark mode
 defined in one place) and a small set of shared primitives in `src/components/ui.tsx` —
-`Card`, `Field`, `Button`, `Alert`. Setup, the nav, sign-in and the not-an-owner screen use
-them; `/send` and `/dues` do not yet.
+`Card`, `Field`, `Button`, `Alert`. Setup, the nav, sign-in, the composer and the
+not-an-owner screen use them; `/dues` does not yet.
 
 The landing page was create-next-app boilerplate until 2026-08-17 — live, at the site root,
 telling visitors to edit `page.tsx`. It is now the logo, a sentence and a sign-in link, and
