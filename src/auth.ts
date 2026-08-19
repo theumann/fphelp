@@ -4,6 +4,7 @@ import Resend from 'next-auth/providers/resend'
 
 import { db } from '@/db'
 import { accounts, sessions, users, verificationTokens } from '@/db/schema'
+import { renderSignInEmail } from '@/lib/render/signin-email'
 
 /**
  * Magic-link auth. Single owner plus co-owners, so there are no passwords to reset and
@@ -47,6 +48,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return
         }
 
+        const email = renderSignInEmail(params.url)
+
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -56,8 +59,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           body: JSON.stringify({
             from: params.provider.from,
             to: params.identifier,
-            subject: 'Your FPheLp sign-in link',
-            text: `Sign in to FPheLp:\n\n${params.url}\n\nThis link expires shortly and can be used once.`,
+            subject: email.subject,
+            html: email.html,
+            // Sent alongside the HTML, never instead of it: an HTML-only email scores as
+            // spam, and a sign-in link in the spam folder is indistinguishable from broken
+            // auth to the person waiting for it.
+            text: email.text,
           }),
         })
 
