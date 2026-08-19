@@ -193,6 +193,7 @@ export default async function SendPage({
       enabled: league.emailEnabled,
       recipientCount: recipientList.length,
       gameweekCount: gameweekCount(bootstrap),
+      hideRecipients: league.hideRecipients,
       // Only a success counts as sent — a failed attempt delivered nothing.
       sentAt:
         delivered?.status === 'sent' ? delivered.updatedAt.toISOString() : undefined,

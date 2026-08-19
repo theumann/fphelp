@@ -73,6 +73,8 @@ export async function seedLeague(
     emailEnabled?: boolean
     /** Addresses on the recipient list. The send button names how many there are. */
     recipients?: string[]
+    /** Defaults to the column default (hidden), matching a league that never chose. */
+    hideRecipients?: boolean
   } = {},
 ): Promise<SeededLeague> {
   const email = opts.email ?? OWNER_EMAIL
@@ -84,8 +86,9 @@ export async function seedLeague(
   const ownerId = users[0].id
 
   const { rows: leagues } = await p.query<{ id: string }>(
-    `INSERT INTO leagues (fpl_league_id, name, email_enabled) VALUES ($1, $2, $3) RETURNING id`,
-    [FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME, opts.emailEnabled ?? false],
+    `INSERT INTO leagues (fpl_league_id, name, email_enabled, hide_recipients)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+    [FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME, opts.emailEnabled ?? false, opts.hideRecipients ?? true],
   )
   const leagueId = leagues[0].id
 

@@ -7,6 +7,15 @@
 
 export interface SendEmailInput {
   to: string[]
+  /**
+   * Whether recipients are hidden from each other.
+   *
+   * `true` bcc's them, so no address is disclosed and a reply reaches only the sender.
+   * `false` cc's them, which is what makes "reply all" reach the league — a mail client
+   * can only reply to addresses it can see, so bcc and group replies are mutually
+   * exclusive by definition rather than by choice.
+   */
+  hideRecipients: boolean
   subject: string
   html: string
   text: string
@@ -30,18 +39,22 @@ export type SendEmailResult =
 const MAX_PER_REQUEST = 50
 
 /**
- * Recipients go in `bcc`, never `to`.
+ * Recipients go in `bcc` or `cc`, never `to`.
  *
- * A league digest to fourteen people in `to` publishes all fourteen addresses to all
- * fourteen — a privacy leak the owner cannot undo once sent, and one nobody notices
- * until it has happened. `to` carries the sender alone so the message still has a
- * valid single recipient.
+ * `to` carries the sender alone either way, so the message always has a valid single
+ * addressee and the owner keeps a copy of what the league received.
+ *
+ * The choice between the other two is a real trade and belongs to the owner, not to this
+ * function. `bcc` discloses nothing but makes group replies impossible; `cc` publishes
+ * every address to every member — irreversibly, on the first send — and is the only way
+ * a league can hold a conversation over its own digest. `hideRecipients` records which
+ * one they chose; see the `leagues` column of the same name.
  */
 function payload(from: string, batch: string[], input: SendEmailInput) {
   return {
     from,
     to: [from],
-    bcc: batch,
+    ...(input.hideRecipients ? { bcc: batch } : { cc: batch }),
     subject: input.subject,
     html: input.html,
     text: input.text,
@@ -89,6 +102,28 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       ok: false,
       error: 'There’s nobody to send to yet — add addresses in Setup.',
       detail: 'Empty recipient list.',
+    }
+  }
+
+  /**
+   * Visible recipients cannot be batched.
+   *
+   * Batching is invisible with `bcc` — nobody can tell how the list was split. With `cc`
+   * it silently fractures the league: each batch sees only its own members, so "reply all"
+   * reaches a third of the group and the owner has no way to know. Refusing is the honest
+   * outcome; the alternative is a conversation that quietly excludes people.
+   *
+   * Unreachable for any realistic league — this one has 18 managers against a ceiling of
+   * 50 — but the failure it prevents is silent, which is exactly the kind worth a guard.
+   */
+  if (!input.hideRecipients && input.to.length > MAX_PER_REQUEST) {
+    return {
+      ok: false,
+      error:
+        `A league this size can’t have everyone visible on one email — ${MAX_PER_REQUEST} ` +
+        'is the limit. Switch on "Hide recipients’ addresses" in Setup, or send to a ' +
+        'mailing-list address instead. Nothing was sent.',
+      detail: `${input.to.length} cc recipients exceeds the per-request ceiling of ${MAX_PER_REQUEST}.`,
     }
   }
 

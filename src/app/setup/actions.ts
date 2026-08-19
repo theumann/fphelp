@@ -14,6 +14,7 @@ import {
   saveSettings,
   setDefaultBlocks,
   setEmailEnabled,
+  setHideRecipients,
   setManagerEntry,
 } from '@/db/queries'
 import { parseRecipient, parseRecipientList } from '@/lib/email/recipients'
@@ -123,6 +124,23 @@ export async function setDefaultBlocksAction(input: {
   await assertOwner(input.leagueId, session.user.id)
 
   await setDefaultBlocks(input.leagueId, input.blocks)
+  revalidatePath('/setup')
+  revalidatePath('/send')
+}
+
+/**
+ * Switches between bcc'ing recipients and cc'ing them.
+ *
+ * Turning hiding *off* is the consequential direction: from the next send onward every
+ * member sees every address, and that cannot be walked back. The confirmation lives in the
+ * UI copy rather than here, because this is also how it gets switched back on.
+ */
+export async function setHideRecipientsAction(input: { leagueId: string; hide: boolean }) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('Not signed in')
+  await assertOwner(input.leagueId, session.user.id)
+
+  await setHideRecipients(input.leagueId, input.hide)
   revalidatePath('/setup')
   revalidatePath('/send')
 }

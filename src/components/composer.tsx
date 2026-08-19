@@ -23,7 +23,14 @@ interface Props {
   defaultBlocks: BlockSelection
   leagueName: string
   /** Absent in demo mode. `enabled` is the league's opt-in — email is off by default. */
-  email?: { enabled: boolean; recipientCount: number; gameweekCount: number; sentAt?: string }
+  email?: {
+    enabled: boolean
+    recipientCount: number
+    gameweekCount: number
+    sentAt?: string
+    /** Drives the send bar's wording — the owner is about to act on it, so it must be true. */
+    hideRecipients: boolean
+  }
   /** Absent in demo mode, where nothing is persisted. */
   persistence?: {
     leagueId: string
@@ -509,10 +516,14 @@ export function Composer({
                     ? 'No recipients yet'
                     : `Send email to ${recipientCount}`}
               </button>
+              {/* The disclosure is irreversible and happens on this tap, so the wording
+                  has to match what the league has actually chosen rather than assume bcc. */}
               <p className="mt-2 text-center text-xs text-muted">
-                {persistence
-                  ? 'Sends from here, now. Addresses are bcc’d.'
-                  : 'Preview only — demo mode doesn’t send.'}
+                {!persistence
+                  ? 'Preview only — demo mode doesn’t send.'
+                  : email?.hideRecipients
+                    ? 'Sends from here, now. Addresses are bcc’d.'
+                    : 'Sends from here, now. Everyone sees the list and can reply to all.'}
               </p>
             </>
           )}

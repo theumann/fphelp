@@ -6,6 +6,7 @@ import {
   addRecipientsAction,
   removeRecipientAction,
   setEmailEnabledAction,
+  setHideRecipientsAction,
 } from '@/app/setup/actions'
 
 import { Alert, Button, Card, inputClass } from './ui'
@@ -20,6 +21,7 @@ interface Props {
   leagueId: string
   initialRecipients: Recipient[]
   initialEmailEnabled: boolean
+  initialHideRecipients: boolean
   /** Managers in the league, purely to show how far the list is from complete. */
   managerCount: number
 }
@@ -39,9 +41,11 @@ export function RecipientsList({
   leagueId,
   initialRecipients,
   initialEmailEnabled,
+  initialHideRecipients,
   managerCount,
 }: Props) {
   const [enabled, setEnabled] = useState(initialEmailEnabled)
+  const [hide, setHide] = useState(initialHideRecipients)
   const [raw, setRaw] = useState('')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const [pending, startTransition] = useTransition()
@@ -69,6 +73,13 @@ export function RecipientsList({
     setEnabled(next)
     startTransition(async () => {
       await setEmailEnabledAction({ leagueId, enabled: next })
+    })
+  }
+
+  function toggleHide(next: boolean) {
+    setHide(next)
+    startTransition(async () => {
+      await setHideRecipientsAction({ leagueId, hide: next })
     })
   }
 
@@ -139,6 +150,43 @@ export function RecipientsList({
               )}
             </Alert>
           )}
+
+          {/**
+           * The reply model, stated as a consequence rather than as a mail header.
+           *
+           * Both directions have a real cost and the owner is the only one who can weigh
+           * them, so the label says what each does to their league instead of naming bcc
+           * and cc. Turning hiding off is the direction that cannot be undone — the next
+           * send publishes every address to every member — so that is spelled out where
+           * the decision is made, not in a doc.
+           */}
+          <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={hide}
+                disabled={pending}
+                onChange={(e) => toggleHide(e.target.checked)}
+                className="mt-0.5 size-4 accent-accent"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
+                <span className="text-xs leading-relaxed text-muted">
+                  {hide
+                    ? 'On: nobody sees anyone else’s address, and members can only reply to you — not to each other.'
+                    : 'Off: everyone sees the whole list, so replying to all reaches the league. This is what makes the digest a conversation.'}
+                </span>
+              </span>
+            </label>
+
+            {!hide && (
+              <p className="text-xs leading-relaxed text-warning">
+                Every member will see all {recipients.length}{' '}
+                {recipients.length === 1 ? 'address' : 'addresses'} from the next send
+                onward. Turning this back on afterwards doesn&apos;t un-send them.
+              </p>
+            )}
+          </div>
 
           <div>
             <p className="text-sm text-muted">

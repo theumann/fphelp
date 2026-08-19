@@ -1,0 +1,1 @@
+ALTER TABLE "leagues" ADD COLUMN "hide_recipients" boolean DEFAULT true NOT NULL;

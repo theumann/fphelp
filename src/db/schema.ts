@@ -105,6 +105,18 @@ export const leagues = pgTable('leagues', {
     .notNull()
     .default({ overallStandings: true, gwResults: true, prizeStructure: false }),
   emailEnabled: boolean('email_enabled').notNull().default(false),
+  /**
+   * Whether recipients are bcc'd rather than cc'd.
+   *
+   * `true` hides the list: nobody sees anyone else's address, and a member can only reply
+   * to the sender. `false` puts them in `cc`, so replying to all reaches the whole league —
+   * which is what a group that treats email as its conversation actually wants.
+   *
+   * Defaults to `true` because the alternative is irreversible: the first send with it off
+   * publishes every address to every member, and no migration should decide that on an
+   * owner's behalf. Turning it off is a deliberate act in Setup.
+   */
+  hideRecipients: boolean('hide_recipients').notNull().default(true),
   notifyOnGwFinish: boolean('notify_on_gw_finish').notNull().default(false),
   /** Set once the final gameweek is scored; locks prize rules against edits. */
   finalisedAt: timestamp('finalised_at', { withTimezone: true }),
