@@ -41,13 +41,16 @@ export interface RenderedEmail {
  * containing `<` would otherwise break the layout of an email already sent to fourteen
  * people. Ampersand must be replaced first or the other replacements are re-escaped.
  */
-function esc(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
+
+/** Local alias, so the many call sites below stay readable. */
+const esc = escapeHtml
 
 /** Colours are inline and literal: email clients strip <style> blocks and CSS variables. */
 const C = {
