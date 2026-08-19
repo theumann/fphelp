@@ -25,8 +25,18 @@ delete (iPhone as { defaultBrowserType?: string }).defaultBrowserType
 test.use(iPhone)
 
 test('send page', async ({ page, db }) => {
-  const league = await seedLeague(db)
+  const league = await seedLeague(db, {
+    emailEnabled: true,
+    recipients: ['steve@example.test', 'victor@example.test'],
+  })
   await useSession(page, league.sessionToken)
   await page.goto('/send')
-  await page.screenshot({ path: 'screenshots/send-iphone.png' })
+  await page.getByRole('textbox', { name: 'Your message' }).fill(
+    'Big week, gents. Two points between the top three and Dana finally joins us.',
+  )
+
+  // Both tabs: the bottom action changes with the channel, which is the thing to look at.
+  await page.screenshot({ path: 'screenshots/send-iphone-email.png' })
+  await page.getByRole('tab', { name: 'WhatsApp' }).click()
+  await page.screenshot({ path: 'screenshots/send-iphone-whatsapp.png' })
 })
