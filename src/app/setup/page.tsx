@@ -77,6 +77,7 @@ export default async function SetupPage() {
           leagueId={league.id}
           initialRecipients={recipientList}
           initialEmailEnabled={league.emailEnabled}
+          initialHideRecipients={league.hideRecipients}
           managerCount={roster.length}
         />
       </Page>

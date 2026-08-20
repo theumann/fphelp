@@ -8,6 +8,9 @@ import {
   saveDraftAction,
   sendEmailAction,
 } from '@/app/send/actions'
+// A league setting, so it lives with the other Setup actions — imported rather than
+// duplicated, which is what keeps the two places one value instead of two.
+import { setHideRecipientsAction } from '@/app/setup/actions'
 import { EmailPanel } from '@/components/email-panel'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
@@ -23,7 +26,14 @@ interface Props {
   defaultBlocks: BlockSelection
   leagueName: string
   /** Absent in demo mode. `enabled` is the league's opt-in — email is off by default. */
-  email?: { enabled: boolean; recipientCount: number; gameweekCount: number; sentAt?: string }
+  email?: {
+    enabled: boolean
+    recipientCount: number
+    gameweekCount: number
+    sentAt?: string
+    /** Drives the send bar's wording — the owner is about to act on it, so it must be true. */
+    hideRecipients: boolean
+  }
   /** Absent in demo mode, where nothing is persisted. */
   persistence?: {
     leagueId: string
@@ -97,6 +107,35 @@ export function Composer({
   // Set when the server reports this gameweek already went out. The resend is a second,
   // separate click — a double-submit can't produce one.
   const [confirmResend, setConfirmResend] = useState(false)
+
+  /**
+   * Mirrors `leagues.hide_recipients` so the panel and the send bar update on the click
+   * rather than after a round trip. The write goes to the same league row Setup edits —
+   * this is a second view of one value, not a per-message copy.
+   */
+  const [hideRecipients, setHideRecipients] = useState(email?.hideRecipients ?? true)
+  const [hideError, setHideError] = useState<string | null>(null)
+
+  /**
+   * Optimistic, but it puts the value back if the write fails.
+   *
+   * Leaving the box showing a state the server never stored is the worst outcome available
+   * here: the owner reads the checkbox, sends, and the digest discloses or hides against
+   * what they just chose — with the disclosing direction unrecoverable. So a failure
+   * reverts and says so rather than being swallowed.
+   */
+  async function changeHideRecipients(hide: boolean) {
+    if (!persistence) return
+    const previous = hideRecipients
+    setHideRecipients(hide)
+    setHideError(null)
+    try {
+      await setHideRecipientsAction({ leagueId: persistence.leagueId, hide })
+    } catch {
+      setHideRecipients(previous)
+      setHideError('Couldn’t save that — the setting is unchanged. Try again before sending.')
+    }
+  }
 
   // composeMessage is a pure function, so toggling a block re-renders from the same
   // stored stats — no refetch.
@@ -433,6 +472,9 @@ export function Composer({
           sentAt={emailSentAt}
           error={emailError}
           canSend={Boolean(persistence)}
+          hideRecipients={hideRecipients}
+          onHideRecipientsChange={changeHideRecipients}
+          hideRecipientsError={hideError}
         />
       )}
 
@@ -509,10 +551,14 @@ export function Composer({
                     ? 'No recipients yet'
                     : `Send email to ${recipientCount}`}
               </button>
+              {/* The disclosure is irreversible and happens on this tap, so the wording
+                  has to match what the league has actually chosen rather than assume bcc. */}
               <p className="mt-2 text-center text-xs text-muted">
-                {persistence
-                  ? 'Sends from here, now. Addresses are bcc’d.'
-                  : 'Preview only — demo mode doesn’t send.'}
+                {!persistence
+                  ? 'Preview only — demo mode doesn’t send.'
+                  : hideRecipients
+                    ? 'Sends from here, now. Addresses are bcc’d.'
+                    : 'Sends from here, now. Everyone sees the list and can reply to all.'}
               </p>
             </>
           )}

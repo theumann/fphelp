@@ -420,6 +420,16 @@ export async function setDefaultBlocks(leagueId: string, blocks: BlockSelection)
   await db.update(leagues).set({ defaultBlocks: blocks }).where(eq(leagues.id, leagueId))
 }
 
+/**
+ * Whether the digest bcc's its recipients or cc's them.
+ *
+ * Turning it off is irreversible in the only sense that matters: the next send publishes
+ * every address to every member, and switching it back on afterwards un-publishes nothing.
+ */
+export async function setHideRecipients(leagueId: string, hide: boolean) {
+  await db.update(leagues).set({ hideRecipients: hide }).where(eq(leagues.id, leagueId))
+}
+
 /** Email is opt-in per league: a WhatsApp-only league never touches the recipient list. */
 export async function setEmailEnabled(leagueId: string, enabled: boolean) {
   await db.update(leagues).set({ emailEnabled: enabled }).where(eq(leagues.id, leagueId))

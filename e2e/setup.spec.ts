@@ -169,3 +169,24 @@ test.describe('email recipients', () => {
     await expect(ownerPage.getByText('Indigo Mwangi —')).toBeVisible()
   })
 })
+
+test.describe('reply model', () => {
+  test('hiding is on until the owner turns it off, and says what changes', async ({
+    ownerPage,
+  }) => {
+    await ownerPage.goto('/setup')
+    await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
+
+    const hide = ownerPage.getByRole('checkbox', { name: /Hide recipients/ })
+    await expect(hide).toBeChecked()
+    await expect(ownerPage.getByText(/only reply to you/)).toBeVisible()
+
+    // The consequential direction: it has to state that the disclosure is permanent.
+    await hide.uncheck()
+    await expect(ownerPage.getByText(/replying to all reaches the league/)).toBeVisible()
+    await expect(ownerPage.getByText(/doesn't un-send them/)).toBeVisible()
+
+    await ownerPage.reload()
+    await expect(ownerPage.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()
+  })
+})

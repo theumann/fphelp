@@ -23,12 +23,17 @@ import { renderEmail } from '@/lib/render/email'
  * Server Actions are publicly reachable endpoints — guarding the page that calls them
  * is not enough. Every action re-checks the session and that the caller owns the league
  * it is writing to.
+ *
+ * Returns the owner rather than just their id: the address is needed for `Reply-To`, and
+ * looking it up separately would mean a second session round trip on every send. It comes
+ * from the session rather than the request because where a member's reply lands is not the
+ * browser's to choose.
  */
 async function requireOwner(leagueId: string) {
   const session = await auth()
   if (!session?.user?.id) throw new Error('Not signed in')
   await assertOwner(leagueId, session.user.id)
-  return session.user.id
+  return { id: session.user.id, email: session.user.email ?? undefined }
 }
 
 export interface SaveDraftResult {
@@ -59,7 +64,7 @@ export async function markSentAction(input: {
   messageId: string
   sentText: string
 }): Promise<{ sentAt: string }> {
-  const userId = await requireOwner(input.leagueId)
+  const { id: userId } = await requireOwner(input.leagueId)
 
   const row = await markSent(input.messageId, input.sentText, userId)
   return { sentAt: (row.sentAt ?? new Date()).toISOString() }
@@ -96,7 +101,7 @@ export async function sendEmailAction(input: {
   /** Set only by an explicit second confirmation, after `alreadySent` came back. */
   confirmResend?: boolean
 }): Promise<SendEmailActionResult> {
-  const userId = await requireOwner(input.leagueId)
+  const { id: userId, email: replyTo } = await requireOwner(input.leagueId)
 
   const league = await getLeague(input.leagueId)
   if (!league) return { ok: false, error: 'That league couldn’t be found.' }
@@ -134,10 +139,14 @@ export async function sendEmailAction(input: {
 
   const result = await sendEmail({
     to,
+    hideRecipients: league.hideRecipients,
     // A newline here would let the rest of the subject be read as extra headers.
     subject: email.subject.replace(/[\r\n]+/g, ' '),
     html: email.html,
     text: email.text,
+    // So a plain "Reply" reaches the owner who sent it rather than the sending address,
+    // which nobody monitors. Co-owners therefore get their own replies, not each other's.
+    replyTo,
   })
 
   await recordDelivery({

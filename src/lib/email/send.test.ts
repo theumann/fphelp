@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { sendEmail } from './send'
 
+/**
+ * Hiding is the default everywhere in this suite, matching the column default. The cases
+ * that turn it off say so explicitly, so a reader can tell which behaviour is under test.
+ */
 const base = {
   subject: 'GW3',
   html: '<p>hi</p>',
   text: 'hi',
+  hideRecipients: true,
 }
 
 function ok(id = 'abc') {
@@ -124,5 +129,72 @@ describe('sendEmail', () => {
         expect(result.detail).toContain('ECONNRESET')
       }
     })
+  })
+})
+
+/**
+ * Visible recipients: the mode that makes the digest a conversation.
+ *
+ * Worth covering closely because both failure directions are silent. Publishing addresses
+ * when the owner asked for privacy cannot be undone, and hiding them when the owner asked
+ * for a group thread produces a league that replies into the void.
+ */
+describe('sendEmail with visible recipients', () => {
+  beforeEach(() => {
+    process.env.AUTH_RESEND_KEY = 'key'
+    process.env.AUTH_EMAIL_FROM = 'league@example.com'
+    global.fetch = vi.fn().mockResolvedValue(ok()) as never
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('ccs the recipients so reply-all reaches the league', async () => {
+    await sendEmail({ ...base, hideRecipients: false, to: ['a@example.com', 'b@example.com'] })
+
+    const sent = bodyOf(0)
+    expect(sent.cc).toEqual(['a@example.com', 'b@example.com'])
+    // Still never `to`: the sender remains the single addressee, so the owner keeps a copy.
+    expect(sent.to).toEqual(['league@example.com'])
+    expect(sent.bcc).toBeUndefined()
+  })
+
+  it('bccs and never ccs when hiding is on', async () => {
+    await sendEmail({ ...base, hideRecipients: true, to: ['a@example.com'] })
+
+    const sent = bodyOf(0)
+    expect(sent.bcc).toEqual(['a@example.com'])
+    expect(sent.cc).toBeUndefined()
+  })
+
+  /**
+   * The silent failure the guard exists for: batching is invisible under bcc, but under cc
+   * it splits the league into groups that cannot see each other, so "reply all" reaches a
+   * fraction of the league and nobody can tell.
+   */
+  it('refuses rather than fragmenting a league across batches', async () => {
+    const to = Array.from({ length: 51 }, (_, i) => `m${i}@example.com`)
+    const result = await sendEmail({ ...base, hideRecipients: false, to })
+
+    expect(result.ok).toBe(false)
+    expect(global.fetch).not.toHaveBeenCalled()
+    if (!result.ok) {
+      expect(result.error).toMatch(/Nothing was sent/)
+      expect(result.error).toMatch(/Hide recipients/)
+    }
+  })
+
+  it('still batches a large league when they are hidden', async () => {
+    const to = Array.from({ length: 51 }, (_, i) => `m${i}@example.com`)
+    const result = await sendEmail({ ...base, hideRecipients: true, to })
+
+    expect(result.ok).toBe(true)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('passes Reply-To through when one is given', async () => {
+    await sendEmail({ ...base, to: ['a@example.com'], replyTo: 'owner@example.com' })
+    expect(bodyOf(0).reply_to).toBe('owner@example.com')
   })
 })
