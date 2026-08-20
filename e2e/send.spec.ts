@@ -108,3 +108,45 @@ test.describe('channel tabs', () => {
     await expect(whatsappTab).toContainText('over the length budget')
   })
 })
+
+/**
+ * The reply model, reachable from the composer.
+ *
+ * It lives in Setup as a league setting, but Setup is not where anyone thinks about
+ * sending — an owner who wanted a conversation would compose, send, and only find out the
+ * digest was bcc'd when nobody could reply. So it is surfaced here too, and these prove the
+ * two places are one stored value rather than two that can disagree.
+ */
+test.describe('reply model on the compose page', () => {
+  test('is visible in the email tab and defaults to hidden', async ({ page, db }) => {
+    const league = await seedLeague(db, {
+      emailEnabled: true,
+      recipients: ['a@example.test', 'b@example.test'],
+    })
+    await useSession(page, league.sessionToken)
+    await page.goto('/send')
+
+    const hide = page.getByRole('checkbox', { name: /Hide recipients/ })
+    await expect(hide).toBeChecked()
+    await expect(page.getByText(/only reply to you/)).toBeVisible()
+    // The send bar has to agree with the checkbox — it is the last thing read before sending.
+    await expect(page.getByText(/Addresses are bcc/)).toBeVisible()
+  })
+
+  test('unticking it updates the send bar and reaches Setup', async ({ page, db }) => {
+    const league = await seedLeague(db, {
+      emailEnabled: true,
+      recipients: ['a@example.test', 'b@example.test'],
+    })
+    await useSession(page, league.sessionToken)
+    await page.goto('/send')
+
+    await page.getByRole('checkbox', { name: /Hide recipients/ }).uncheck()
+    await expect(page.getByText(/Everyone sees the list and can reply to all/)).toBeVisible()
+    await expect(page.getByText(/see all 2 addresses/)).toBeVisible()
+
+    // One value, two views: the change has to be visible in Setup, not just here.
+    await page.goto('/setup')
+    await expect(page.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()
+  })
+})

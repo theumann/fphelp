@@ -16,6 +16,10 @@ interface Props {
   error: string | null
   /** False in demo mode, where there is no league row and nothing to send to. */
   canSend: boolean
+  hideRecipients: boolean
+  onHideRecipientsChange: (hide: boolean) => void
+  /** Set when the setting failed to save, so the box has been put back. */
+  hideRecipientsError: string | null
 }
 
 const LABELS: { key: keyof BlockSelection; label: string }[] = [
@@ -42,6 +46,9 @@ export function EmailPanel({
   sentAt,
   error,
   canSend,
+  hideRecipients,
+  onHideRecipientsChange,
+  hideRecipientsError,
 }: Props) {
   const [showHtml, setShowHtml] = useState(true)
 
@@ -57,6 +64,50 @@ export function EmailPanel({
           No addresses yet — add them in Setup. The FPL API doesn&apos;t provide them, so the
           list is yours to keep.
         </p>
+      )}
+
+      {/**
+       * The reply model, here as well as in Setup.
+       *
+       * It is a league setting and Setup is its home, but Setup is not where anyone thinks
+       * about sending — an owner who wants a conversation would compose, send, and only
+       * discover the digest was bcc'd when nobody could reply to it. This is the same
+       * stored value, not a per-message copy: the disclosure is irreversible, so cc'ing
+       * once and hiding next week un-publishes nothing.
+       */}
+      {canSend && (
+        <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={hideRecipients}
+              onChange={(e) => onHideRecipientsChange(e.target.checked)}
+              className="mt-0.5 size-4 accent-accent"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
+              <span className="text-xs leading-relaxed text-muted">
+                {hideRecipients
+                  ? 'Members can only reply to you, not to each other.'
+                  : 'Everyone sees the whole list, so replying to all reaches the league.'}
+              </span>
+            </span>
+          </label>
+
+          {hideRecipientsError && (
+            <p role="alert" className="text-xs leading-relaxed text-danger">
+              {hideRecipientsError}
+            </p>
+          )}
+
+          {!hideRecipients && (
+            <p className="text-xs leading-relaxed text-warning">
+              Every member will see all {recipientCount}{' '}
+              {recipientCount === 1 ? 'address' : 'addresses'} from this send onward.
+              Turning this back on doesn&apos;t un-send them.
+            </p>
+          )}
+        </div>
       )}
 
       <fieldset className="flex flex-col gap-2">
