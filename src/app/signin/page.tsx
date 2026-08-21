@@ -110,15 +110,34 @@ export default async function SignInPage({
            * redirects to `pages.error` itself with the code already sanitised. So both
            * paths are live and the page must read codes from either.
            */
+          /**
+           * `redirect: false` sends the email and hands back the URL instead of
+           * navigating, so we can go straight to this page rather than through Auth.js's
+           * `/api/auth/verify-request`.
+           *
+           * That hop used to work by accident. `signIn` finishes with Next's `redirect()`
+           * pointed at `${AUTH_URL}/api/auth/verify-request`, and while `AUTH_URL` named a
+           * different origin than the browser was on, Next made it a hard navigation and
+           * the browser followed the 302 to this page. Pointing `AUTH_URL` at the same
+           * origin turned it into a client-side navigation to a Route Handler, which is
+           * not a page — so it parked there and the owner never saw the confirmation.
+           *
+           * Skipping the hop removes the dependency on which of those two Next chooses.
+           */
           try {
             await signIn('resend', {
               email: String(formData.get('email') ?? ''),
               redirectTo: '/send',
+              redirect: false,
             })
           } catch (err) {
             if (err instanceof AuthError) redirect(`/signin?error=${err.type}`)
             throw err
           }
+
+          // Outside the try: `redirect` signals by throwing, so calling it inside would be
+          // caught by the handler above and rethrown as an unexplained failure.
+          redirect('/signin?provider=resend')
         }}
         className="flex flex-col gap-3"
       >
