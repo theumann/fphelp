@@ -19,7 +19,15 @@ export interface PrizeRuleRow {
 }
 
 export interface LeagueSettings {
-  potTotal: number
+  /**
+   * `undefined` means nobody has set it yet, which is not the same as zero.
+   *
+   * The distinction is load-bearing rather than tidy: a league handed over unconfigured
+   * would otherwise validate as "fixed prizes exceed the pot" and render `Pot: $0.00` into
+   * the digest, both of which state something false about the league's money instead of
+   * admitting the figure is unknown.
+   */
+  potTotal: number | undefined
   currency: string
   entryFee?: number
   gwWinnerAmount: number
@@ -50,7 +58,7 @@ export function toPrizeRules(settings: LeagueSettings): PrizeRuleRow[] {
  */
 export function fromPrizeRules(
   rows: PrizeRuleRow[],
-  base: { potTotal: number; currency: string; entryFee?: number },
+  base: { potTotal: number | undefined; currency: string; entryFee?: number },
 ): LeagueSettings {
   const gwWinner = rows.find((r) => r.kind === 'gw_winner_fixed')
   const bestGw = rows.find((r) => r.kind === 'season_best_gw_fixed')
@@ -133,6 +141,7 @@ export function summarise(settings: LeagueSettings, gameweekCount: number): Priz
 
   return {
     currency: settings.currency,
+    potSet: pot.potSet,
     potCents: pot.potCents,
     gwWinnerCents: Math.round(settings.gwWinnerAmount * 100),
     seasonBestGwCents: Math.round(settings.seasonBestGwAmount * 100),

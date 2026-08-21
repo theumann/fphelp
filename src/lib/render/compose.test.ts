@@ -28,6 +28,7 @@ const allBlocks: BlockSelection = {
 
 const prize: PrizeSummary = {
   currency: 'USD',
+  potSet: true,
   potCents: 180_000,
   gwWinnerCents: 1_500,
   seasonBestGwCents: 10_000,

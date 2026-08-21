@@ -151,8 +151,14 @@ export default async function SendPage({
   // from, and no recipient list that a synthetic roster could correspond to.
   let email
   let signature = `${session.user.name ?? session.user.email} — ${standings.league.name} Admin`
+  // Demo mode has no league, so no pot — `undefined` rather than 0, which would render a
+  // prize block claiming the pot is nothing.
   let prize = summarise(
-    { ...DEFAULT_SETTINGS, potTotal: 0, rankPercentages: [...DEFAULT_SETTINGS.rankPercentages] },
+    {
+      ...DEFAULT_SETTINGS,
+      potTotal: undefined,
+      rankPercentages: [...DEFAULT_SETTINGS.rankPercentages],
+    },
     gameweekCount(bootstrap),
   )
 

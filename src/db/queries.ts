@@ -291,7 +291,9 @@ export async function getSettings(leagueId: string): Promise<LeagueSettings> {
   return fromPrizeRules(
     rows.map((r) => ({ kind: r.kind, rank: r.rank, value: r.value })),
     {
-      potTotal: Number(league?.potTotal ?? 0),
+      // Null stays undefined rather than collapsing to 0: "nobody has set this" and
+      // "the pot is zero" are different claims, and only one of them is safe to print.
+      potTotal: league?.potTotal != null ? Number(league.potTotal) : undefined,
       currency: league?.currency ?? DEFAULT_SETTINGS.currency,
       entryFee: league?.entryFee ? Number(league.entryFee) : undefined,
     },
@@ -310,7 +312,7 @@ export async function saveSettings(leagueId: string, settings: LeagueSettings) {
     await tx
       .update(leagues)
       .set({
-        potTotal: String(settings.potTotal),
+        potTotal: settings.potTotal !== undefined ? String(settings.potTotal) : null,
         currency: settings.currency,
         entryFee: settings.entryFee !== undefined ? String(settings.entryFee) : null,
       })
