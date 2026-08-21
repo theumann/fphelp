@@ -232,7 +232,7 @@ Verified against live calls on 2026-08-03, **pre-season** for 2026/27 (GW1 deadl
 | Endpoint | Fields used |
 |---|---|
 | `bootstrap-static/` ✅ | `events[]` (38): `id`, `name`, `finished`, `data_checked`, `deadline_time`, `average_entry_score` (**global**, not league). Also present: `release_time`, `ranked_count`, `is_current`, `is_next`, `is_previous`, `highest_scoring_entry` |
-| `event-status/` ⚠️ | `{ status: [], leagues: "" }` pre-season. Envelope confirmed; `status[].bonus_added` and the `leagues === "Updated"` string are **not yet observed** |
+| `event-status/` ⚠️ | `{ status: [], leagues: "" }` pre-season; during GW1, one `status` row per match day — `{bonus_added, date, event, points}`, confirmed live 2026-08-21. `bonus_added` exists but has only been seen `false`, and `leagues` has only ever been `""` — the `"Updated"` string the send gate needs is **still unobserved** |
 | `leagues-classic/{id}/standings/` ⚠️ | Top level: `league`, `standings`, `new_entries`, `last_updated_data`. `league` ✅: `id`, `name`, `created`, `closed`, `start_event`, `league_type` (`x` = private), `scoring` (`c` = classic), `admin_entry`. `standings`: `has_next`, `page`, `results[]` ✅ envelope. `new_entries.results[]` ✅: `entry`, `entry_name`, `joined_time`, `player_first_name`, `player_last_name`. `standings.results[]` elements still unobserved: `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total` |
 | `entry/{id}/history` ⚠️ | Top level `current`, `past`, `chips` ✅. `past[]` ✅: `season_name`, `total_points`, `rank`, `rank_percentage`. `current[]` unobserved: `event`, `points`, `rank`, `total_points`, `points_on_bench`, `event_transfers_cost`, `overall_rank` |
 

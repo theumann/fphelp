@@ -28,7 +28,16 @@ export interface BootstrapStatic {
   events: FplEvent[]
 }
 
-/** ⚠️ `status` is empty outside a live gameweek, so element fields are unobserved. */
+/**
+ * ✅ Field names confirmed live 2026-08-21, 18:09Z — 40 minutes into GW1, the first time
+ * `status` has ever been non-empty. One row per match day of the gameweek:
+ *
+ *     {"bonus_added":false,"date":"2026-08-21","event":1,"points":""}
+ *
+ * ⚠️ `points` was `""` on every row while matches were unplayed. Its populated values are
+ * still unobserved, which is fine — nothing reads it. `bonus_added` is what the send gate
+ * turns on, and it was `false` throughout, as it should be.
+ */
 export interface EventStatusDay {
   date: string
   event: number
@@ -37,8 +46,11 @@ export interface EventStatusDay {
 }
 
 /**
- * ⚠️ Envelope confirmed (`{status: [], leagues: ""}` pre-season). The `leagues`
- * value `"Updated"` is NOT yet observed — the send trigger depends on it.
+ * ✅ Envelope confirmed twice: `{status: [], leagues: ""}` pre-season, and a four-element
+ * `status` during GW1.
+ *
+ * ⚠️ `leagues` has only ever been `""`. The value `"Updated"` is what opens the send
+ * gate and has still never been seen — re-check once GW1 settles.
  */
 export interface EventStatus {
   status: EventStatusDay[]
