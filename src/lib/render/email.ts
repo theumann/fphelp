@@ -254,7 +254,7 @@ export function renderEmail(input: RenderEmailInput): RenderedEmail {
     `</div>`
 
   return {
-    subject: `${input.leagueName} — Gameweek ${input.gameweek}`,
+    subject: `${input.leagueName} - Gameweek ${input.gameweek}`,
     html,
     text: renderText(input),
   }

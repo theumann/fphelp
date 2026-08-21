@@ -181,10 +181,10 @@ test.describe('reply model', () => {
     await expect(hide).toBeChecked()
     await expect(ownerPage.getByText(/only reply to you/)).toBeVisible()
 
-    // The consequential direction: it has to state that the disclosure is permanent.
+    // Each state describes what it does to the league, so the owner is choosing between
+    // two outcomes rather than between two mail headers.
     await hide.uncheck()
-    await expect(ownerPage.getByText(/replying to all reaches the league/)).toBeVisible()
-    await expect(ownerPage.getByText(/doesn't un-send them/)).toBeVisible()
+    await expect(ownerPage.getByText(/reaches all league members/)).toBeVisible()
 
     await ownerPage.reload()
     await expect(ownerPage.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()

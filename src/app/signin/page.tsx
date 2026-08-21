@@ -18,7 +18,7 @@ import { Logo } from '@/components/logo'
 const MAIL_FAILURE = {
   title: "The sign-in email couldn't be sent",
   detail:
-    'This is a server-side problem, not your address — the mail provider refused the ' +
+    'This is a server-side problem, not your address. The mail provider refused the ' +
     'request. Check the app logs for the reason; a common one is Resend declining to ' +
     'send to any address but the account owner until a domain is verified.',
 }
@@ -80,7 +80,7 @@ export default async function SignInPage({
       <div className="flex flex-col items-center gap-3 text-center">
         {/* The wordmark instead of a text heading — this is the app's first screen. */}
         <Logo width={200} priority />
-        <p className="text-sm text-muted">Sign in with your email — no password.</p>
+        <p className="text-sm text-muted">Sign in with your email - no password.</p>
       </div>
 
       {sent && (

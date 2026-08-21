@@ -15,6 +15,37 @@ export interface BlockSelection {
   prizeStructure: boolean
 }
 
+/** Nothing selected. Every generated block off, prose and signature only. */
+export const NO_BLOCKS: BlockSelection = {
+  overallStandings: false,
+  gwResults: false,
+  prizeStructure: false,
+}
+
+/**
+ * Whether a block is built from the gameweek's scores.
+ *
+ * The prize structure is not: it comes from the league's own settings — the pot, the fixed
+ * amounts, the percentages — none of which move because a match is being played. So it
+ * stays available mid-gameweek while the other two do not.
+ */
+export function dependsOnGameweek(key: keyof BlockSelection): boolean {
+  return key === 'overallStandings' || key === 'gwResults'
+}
+
+/**
+ * What may actually be rendered, given whether the gameweek's numbers have settled.
+ *
+ * Separate from disabling the checkboxes, and it is the half that matters. A draft saved
+ * last week, or a league default, can arrive with standings switched on — so relying on
+ * the control being greyed out would still compose a provisional table into the message.
+ * Only the blocks that depend on the gameweek are withheld.
+ */
+export function effectiveBlocks(blocks: BlockSelection, statsReady: boolean): BlockSelection {
+  if (statsReady) return blocks
+  return { ...blocks, overallStandings: false, gwResults: false }
+}
+
 export interface PrizeSummary {
   currency: string
   /** False when the league has not set a pot. Zero is a figure; unset is not. */

@@ -58,7 +58,6 @@ const SCORED: ClassicLeagueEntry[] = Array.from({ length: 17 }, (_, i) => {
   const named = NAMED[i]
   const rank = i === 1 ? 1 : i + 1
   return {
-    id: i + 1,
     entry: named?.entry ?? 1_000_010 + i,
     entry_name: named?.entry_name ?? `Team ${i + 1}`,
     player_name: named?.player_name ?? `Manager ${i + 1}`,
@@ -68,6 +67,7 @@ const SCORED: ClassicLeagueEntry[] = Array.from({ length: 17 }, (_, i) => {
     rank_sort: i + 1,
     total: i < 2 ? 148 : 148 - i * 6,
     event_total: [76, 71, 82][i] ?? 60 - i,
+    club_badge_src: null,
   }
 })
 

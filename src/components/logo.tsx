@@ -33,7 +33,7 @@ export function Logo({
     <>
       <Image
         src="/logo.png"
-        alt="FPheLp — manage your fantasy league"
+        alt="FPheLp - manage your fantasy league"
         width={width}
         height={height}
         priority={priority}
@@ -41,7 +41,7 @@ export function Logo({
       />
       <Image
         src="/logo-dark.png"
-        alt="FPheLp — manage your fantasy league"
+        alt="FPheLp - manage your fantasy league"
         width={width}
         height={height}
         priority={priority}

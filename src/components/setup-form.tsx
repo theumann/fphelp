@@ -137,15 +137,12 @@ export function SetupForm({
     <div className="flex flex-col gap-5">
       {finalised && (
         <Alert tone="warning">
-          This season is finalised. Prize rules are locked — changing them now would
+          This season is finalised. Prize rules are locked - changing them now would
           rewrite winnings that have already been settled.
         </Alert>
       )}
 
-      <Card
-        title="The pot"
-        hint="Entered directly rather than derived from the entry fee — some managers may not have paid, and the roster changes as people join."
-      >
+      <Card title="The pot">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Currency">
             <input
@@ -343,7 +340,7 @@ export function SetupForm({
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-muted">
             {finalised
-              ? 'Locked — the season is finalised.'
+              ? 'Locked - the season is finalised.'
               : dirty
                 ? 'Unsaved changes'
                 : 'All changes saved'}
@@ -370,7 +367,7 @@ function describeError(error: ReturnType<typeof validateSettings>[number]): stri
     case 'no-paid-places':
       return 'Add at least one paid place.'
     case 'non-positive-percentage':
-      return `Place ${error.rank} is worth nothing — remove it instead.`
+      return `Place ${error.rank} is worth nothing - remove it instead.`
     case 'more-places-than-managers':
       return `${error.places} paid places but only ${error.managers} managers.`
   }

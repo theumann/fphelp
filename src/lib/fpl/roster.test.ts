@@ -5,7 +5,6 @@ import type { ClassicLeagueEntry, ClassicLeagueStandings, NewLeagueEntry } from 
 
 function standing(over: Partial<ClassicLeagueEntry> & { entry: number }): ClassicLeagueEntry {
   return {
-    id: over.entry,
     entry_name: `Team ${over.entry}`,
     player_name: `Player ${over.entry}`,
     rank: 1,
@@ -13,6 +12,7 @@ function standing(over: Partial<ClassicLeagueEntry> & { entry: number }): Classi
     rank_sort: 1,
     total: 100,
     event_total: 50,
+    club_badge_src: null,
     ...over,
   }
 }

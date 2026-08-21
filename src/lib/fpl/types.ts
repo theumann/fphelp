@@ -34,9 +34,10 @@ export interface BootstrapStatic {
  *
  *     {"bonus_added":false,"date":"2026-08-21","event":1,"points":""}
  *
- * ⚠️ `points` was `""` on every row while matches were unplayed. Its populated values are
- * still unobserved, which is fine — nothing reads it. `bonus_added` is what the send gate
- * turns on, and it was `false` throughout, as it should be.
+ * `points` is `""` before a day's matches and `"p"` once they are played — observed
+ * 2026-08-21. Nothing reads it. `bonus_added` is what the send gate turns on, and it was
+ * still `false` on a completed match day, which is the whole reason the gate exists:
+ * scores land well before bonus does.
  */
 export interface EventStatusDay {
   date: string
@@ -49,27 +50,45 @@ export interface EventStatusDay {
  * ✅ Envelope confirmed twice: `{status: [], leagues: ""}` pre-season, and a four-element
  * `status` during GW1.
  *
- * ⚠️ `leagues` has only ever been `""`. The value `"Updated"` is what opens the send
- * gate and has still never been seen — re-check once GW1 settles.
+ * ⚠️ `leagues` has three known values and only two have been seen: `""` before a
+ * gameweek, and `"Updating"` while one is being played (observed 2026-08-21, 23:29Z).
+ * `"Updated"` is what opens the send gate and has **still never been observed** — it is
+ * the last unverified thing the trigger depends on. Re-check once GW1 settles.
+ *
+ * Note what `"Updating"` proves: the field is not a two-state flag. Testing it for
+ * anything other than equality with `"Updated"` — truthiness, say — would have opened the
+ * gate mid-gameweek.
  */
 export interface EventStatus {
   status: EventStatusDay[]
   leagues: string
 }
 
-/** ⚠️ Element fields unobserved — standings.results is empty pre-season. */
+/**
+ * ✅ Confirmed live 2026-08-21, once GW1 had scored and the league moved out of
+ * `new_entries`. The community-typed shape this was copied from was wrong in two ways:
+ *
+ * - it declared an `id` that the API does not send. Nothing read it, so nothing broke —
+ *   but a required field that is always `undefined` is a trap left lying about;
+ * - it omitted `club_badge_src`, which the API does send.
+ */
 export interface ClassicLeagueEntry {
-  id: number
   entry: number
   entry_name: string
   player_name: string
   rank: number
-  /** Previous gameweek's rank; 0 when there is no prior gameweek. */
+  /**
+   * Previous gameweek's rank. `0` when there is no prior gameweek — observed on every
+   * manager after GW1, so rank movement must treat `0` as "no previous rank" and not as
+   * a climb from position zero.
+   */
   last_rank: number
   /** Arbitrary stable total order. NEVER use this to detect ties — use `rank`. */
   rank_sort: number
   total: number
   event_total: number
+  /** Null for every manager in the reference league; unused. */
+  club_badge_src: string | null
 }
 
 /**

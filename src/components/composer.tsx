@@ -13,13 +13,23 @@ import {
 import { setHideRecipientsAction } from '@/app/setup/actions'
 import { EmailPanel } from '@/components/email-panel'
 import type { DigestStats } from '@/lib/digest/stats'
-import type { BlockSelection, PrizeSummary } from '@/lib/render/blocks'
+import {
+  dependsOnGameweek,
+  effectiveBlocks,
+  type BlockSelection,
+  type PrizeSummary,
+} from '@/lib/render/blocks'
 import { DEFAULT_BUDGET } from '@/lib/render/budget'
 import { composeMessage } from '@/lib/render/compose'
 import { renderEmail } from '@/lib/render/email'
 import { buildWhatsAppLinks } from '@/lib/render/whatsapp'
 
 interface Props {
+  /**
+   * Whether the gameweek's figures have settled. False mid-gameweek and while bonus
+   * points are landing — the prose still sends, the generated blocks do not.
+   */
+  statsReady: boolean
   stats: DigestStats
   prize: PrizeSummary
   signature: string
@@ -47,7 +57,7 @@ interface Props {
 
 const BLOCK_LABELS: { key: keyof BlockSelection; label: string; hint: string }[] = [
   { key: 'gwResults', label: 'Gameweek results', hint: 'Winner, average, riser and faller' },
-  { key: 'overallStandings', label: 'Overall standings', hint: 'Full table with movement' },
+  { key: 'overallStandings', label: 'Season standings', hint: 'Full table with movement' },
   { key: 'prizeStructure', label: 'Prize structure', hint: 'Pot and prize breakdown' },
 ]
 
@@ -55,6 +65,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 type Channel = 'email' | 'whatsapp'
 
 export function Composer({
+  statsReady,
   stats,
   prize,
   signature,
@@ -133,15 +144,23 @@ export function Composer({
       await setHideRecipientsAction({ leagueId: persistence.leagueId, hide })
     } catch {
       setHideRecipients(previous)
-      setHideError('Couldn’t save that — the setting is unchanged. Try again before sending.')
+      setHideError('Couldn’t save that. The setting is unchanged - try again before sending.')
     }
   }
 
   // composeMessage is a pure function, so toggling a block re-renders from the same
   // stored stats — no refetch.
+  /**
+   * What is actually rendered, which is not the same as what is ticked. A draft saved
+   * after last week's gameweek arrives with standings selected, so honouring the checkbox
+   * would compose a provisional table even with the control greyed out.
+   */
+  const sendableBlocks = effectiveBlocks(blocks, statsReady)
+  const sendableEmailBlocks = effectiveBlocks(emailBlocks, statsReady)
+
   const composed = useMemo(
-    () => composeMessage({ body, blocks, stats, prize, signature }),
-    [body, blocks, stats, prize, signature],
+    () => composeMessage({ body, blocks: sendableBlocks, stats, prize, signature }),
+    [body, sendableBlocks, stats, prize, signature],
   )
 
   const rendered = useMemo(
@@ -150,12 +169,12 @@ export function Composer({
         leagueName,
         gameweek: stats.gameweek,
         body,
-        blocks: emailBlocks,
+        blocks: sendableEmailBlocks,
         stats,
         prize,
         signature,
       }),
-    [leagueName, stats, body, emailBlocks, prize, signature],
+    [leagueName, stats, body, sendableEmailBlocks, prize, signature],
   )
 
   const links = useMemo(() => buildWhatsAppLinks(composed.text), [composed.text])
@@ -265,7 +284,7 @@ export function Composer({
         // Read at click time — the draft autosaves, so the id doesn't exist at first render.
         messageId: messageIdRef.current,
         body,
-        blocks: emailBlocks,
+        blocks: sendableEmailBlocks,
         signature,
         gameweekCount: email.gameweekCount,
         confirmResend: resend,
@@ -320,11 +339,12 @@ export function Composer({
         {persistence && (
           <span className="text-xs text-muted">
             {saveState === 'saving' && 'Saving…'}
-            {saveState === 'saved' && 'Draft saved — your co-owner sees this too.'}
+            {saveState === 'saved' && 'Draft saved - your co-owner sees this too.'}
             {saveState === 'error' && (
               <span className="text-danger">Couldn&apos;t save the draft.</span>
             )}
-            {saveState === 'idle' && 'Shared draft — the same text feeds both channels.'}
+            {saveState === 'idle' &&
+              'Shared draft - the same text feeds both email and WhatsApp. You can send either or both.'}
           </span>
         )}
       </label>
@@ -377,23 +397,41 @@ export function Composer({
         >
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-medium">Include</legend>
-            {BLOCK_LABELS.map(({ key, label, hint }) => (
-              <label
-                key={key}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-line p-3"
-              >
-                <input
-                  type="checkbox"
-                  checked={blocks[key]}
-                  onChange={(e) => setBlocks({ ...blocks, [key]: e.target.checked })}
-                  className="mt-1 size-4 accent-accent"
-                />
-                <span className="flex flex-col">
-                  <span className="text-sm font-medium">{label}</span>
-                  <span className="text-xs text-muted">{hint}</span>
-                </span>
-              </label>
-            ))}
+
+            {BLOCK_LABELS.map(({ key, label, hint }) => {
+              // Only the two built from scores. The prize figures come from the league's
+              // settings and do not move because a match is being played.
+              const withheld = !statsReady && dependsOnGameweek(key)
+              return (
+                <label
+                  key={key}
+                  className={`flex items-start gap-3 rounded-lg border border-line p-3 ${
+                    withheld ? 'opacity-50' : 'cursor-pointer'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={withheld}
+                    checked={!withheld && blocks[key]}
+                    onChange={(e) => setBlocks({ ...blocks, [key]: e.target.checked })}
+                    className="mt-1 size-4 accent-accent"
+                  />
+                  <span className="flex flex-col">
+                    <span className="text-sm font-medium">{label}</span>
+                    <span className="text-xs text-muted">{hint}</span>
+                  </span>
+                </label>
+              )
+            })}
+
+            {/* Under the controls it explains, rather than above them: by the time it is
+                read, the greyed-out rows it refers to have already been seen. */}
+            {!statsReady && (
+              <p className="rounded-lg bg-warning-surface p-3 text-xs leading-relaxed text-warning">
+Gameweek in progress. Results and standings will be available when we have the
+              current gameweek&apos;s final results.
+            </p>
+            )}
           </fieldset>
 
           <div className="flex flex-col gap-1">
@@ -429,7 +467,7 @@ export function Composer({
                 disabled={marking}
                 className="self-start text-xs underline disabled:opacity-50"
               >
-                {marking ? 'Saving…' : "It wasn't actually sent — undo"}
+                {marking ? 'Saving…' : "It wasn't actually sent - undo"}
               </button>
             </div>
           ) : (
@@ -437,7 +475,7 @@ export function Composer({
             tappedSend && (
               <div className="flex flex-col gap-2 rounded-lg border border-line-strong p-3">
                 <p className="text-sm">
-                  Did the message actually go out? We can&apos;t tell — WhatsApp
+                  Did the message actually go out? We can&apos;t tell - WhatsApp
                   doesn&apos;t report back.
                 </p>
                 <button
@@ -449,7 +487,7 @@ export function Composer({
                   {marking ? 'Saving…' : 'Yes, mark as sent'}
                 </button>
                 <p className="text-xs text-muted">
-                  If WhatsApp didn&apos;t open, use Copy and paste it in — then come back
+                  If WhatsApp didn&apos;t open, use Copy and paste it in, then come back
                   and mark it sent.
                 </p>
               </div>
@@ -469,6 +507,7 @@ export function Composer({
           blocks={emailBlocks}
           onBlocksChange={setEmailBlocks}
           recipientCount={recipientCount}
+          statsReady={statsReady}
           sentAt={emailSentAt}
           error={emailError}
           canSend={Boolean(persistence)}
@@ -534,7 +573,8 @@ export function Composer({
                 </button>
               </div>
               <p className="mt-2 text-center text-xs text-warning">
-                Already emailed — this delivers a second copy to all {recipientCount}.
+                Already emailed - this delivers a second copy to all {recipientCount} team{' '}
+                {recipientCount === 1 ? 'manager' : 'managers'}.
               </p>
             </>
           ) : (
@@ -549,13 +589,15 @@ export function Composer({
                   ? 'Sending…'
                   : recipientCount === 0
                     ? 'No recipients yet'
-                    : `Send email to ${recipientCount}`}
+                    : `Send email to ${recipientCount} team ${
+                        recipientCount === 1 ? 'manager' : 'managers'
+                      }`}
               </button>
               {/* The disclosure is irreversible and happens on this tap, so the wording
                   has to match what the league has actually chosen rather than assume bcc. */}
               <p className="mt-2 text-center text-xs text-muted">
                 {!persistence
-                  ? 'Preview only — demo mode doesn’t send.'
+                  ? 'Preview only - demo mode doesn’t send.'
                   : hideRecipients
                     ? 'Sends from here, now. Addresses are bcc’d.'
                     : 'Sends from here, now. Everyone sees the list and can reply to all.'}

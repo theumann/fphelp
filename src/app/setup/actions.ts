@@ -49,7 +49,7 @@ export async function saveSettingsAction(input: {
   if (await isFinalised(input.leagueId)) {
     return {
       ok: false,
-      errors: ['This season is finalised — prize rules can no longer be changed.'],
+      errors: ['This season is finalised - prize rules can no longer be changed.'],
     }
   }
 
@@ -226,7 +226,7 @@ function describe(error: ReturnType<typeof validateSettings>[number]): string {
     case 'no-paid-places':
       return 'Add at least one paid place.'
     case 'non-positive-percentage':
-      return `Place ${error.rank} is worth 0% — remove it instead.`
+      return `Place ${error.rank} is worth 0% - remove it instead.`
     case 'more-places-than-managers':
       return `${error.places} paid places but only ${error.managers} managers in the league.`
   }

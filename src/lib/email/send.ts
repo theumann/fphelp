@@ -76,16 +76,16 @@ const NOT_CONFIGURED = 'Email isn’t set up on this server yet. Nothing was sen
  */
 function cause(status: number): string {
   if (status === 401 || status === 403) {
-    return 'The email service rejected our credentials. This needs fixing on the server — it isn’t something you did.'
+    return 'The email service rejected our credentials. This needs fixing on the server - it isn’t something you did.'
   }
   if (status === 429) {
-    return 'The email service is rate-limiting us — wait a minute and try again.'
+    return 'The email service is rate-limiting us - wait a minute and try again.'
   }
   if (status === 422 || status === 400) {
-    return 'The email service refused the message — usually a recipient address it won’t accept. Check the list in Setup.'
+    return 'The email service refused the message - usually a recipient address it won’t accept. Check the list in Setup.'
   }
   if (status >= 500) {
-    return 'The email service is having trouble at their end — try again shortly.'
+    return 'The email service is having trouble at their end - try again shortly.'
   }
   return 'The email service refused the message.'
 }
@@ -100,7 +100,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   if (input.to.length === 0) {
     return {
       ok: false,
-      error: 'There’s nobody to send to yet — add addresses in Setup.',
+      error: 'There’s nobody to send to yet - add addresses in Setup.',
       detail: 'Empty recipient list.',
     }
   }
@@ -120,7 +120,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return {
       ok: false,
       error:
-        `A league this size can’t have everyone visible on one email — ${MAX_PER_REQUEST} ` +
+        `A league this size can’t have everyone visible on one email - ${MAX_PER_REQUEST} ` +
         'is the limit. Switch on "Hide recipients’ addresses" in Setup, or send to a ' +
         'mailing-list address instead. Nothing was sent.',
       detail: `${input.to.length} cc recipients exceeds the per-request ceiling of ${MAX_PER_REQUEST}.`,

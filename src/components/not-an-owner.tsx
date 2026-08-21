@@ -15,7 +15,7 @@ export function NotAnOwner() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           You&apos;re signed in, but your account isn&apos;t one of this league&apos;s owners.
-          Access is granted deliberately rather than by signing up — ask an existing owner
+          Access is granted deliberately rather than by signing up. Ask an existing owner
           to add you from their Setup page.
         </p>
       </div>

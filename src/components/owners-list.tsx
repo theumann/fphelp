@@ -127,7 +127,7 @@ export function OwnersList({ leagueId, owners, currentUserId }: Props) {
           </Button>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          Nothing is emailed. This only allows the address to sign in — they still have to
+          Nothing is emailed. This only allows the address to sign in. They still have to
           request a link from the sign-in page themselves.
         </p>
       </div>
