@@ -30,16 +30,18 @@ The second historical gap is now partly covered: the capture job upserts `manage
 Diff real payloads against the ⚠️ rows in [ARCHITECTURE.md](../ARCHITECTURE.md#endpoint-reference).
 
 - [ ] **`standings.results[]` element fields** — `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total`. Never observed live; the only fields still taken purely on trust.
-- [ ] **`event-status.leagues`** — confirm it really is the string `"Updated"`. Pre-season it is `""`. The whole send trigger depends on this exact value.
-- [ ] **`status[].bonus_added`** — confirm the field exists and flips as expected.
+- [ ] **`event-status.leagues`** — confirm it really is the string `"Updated"`. Still `""` 40 minutes into GW1, so the value remains unobserved. The whole send trigger depends on it.
+- [x] **`status[].bonus_added`** — the field exists. Confirmed 2026-08-21 18:09Z, the first time `status` has ever been non-empty. **Not yet seen flipping to `true`** — every row was `false` while matches were unplayed, which is correct; re-check as they finish.
 - [ ] **`history.current[]` element fields** — `event`, `points`, `total_points`, `rank`, `overall_rank`, `points_on_bench`, `event_transfers_cost`.
 
 ## 3. Watch the standings / new_entries transition
 
 The most interesting moment in the whole season for this app, and it only happens once.
 
-- [ ] Do the 14 managers move from `new_entries` into `standings`?
-- [ ] Does any manager appear in **both** at once? (The dedupe-on-`entry` rule assumes this is possible.)
+**Not at kickoff.** Checked 40 minutes past the GW1 deadline: `standings.results` was still `0` and all 17 managers were still in `new_entries`, none in both. So the move happens when the gameweek is *processed*, not when it starts — the observation window is Sunday evening through Tuesday, alongside §7.
+
+- [ ] Do the 17 managers move from `new_entries` into `standings`?
+- [ ] Does any manager appear in **both** at once? (The dedupe-on-`entry` rule assumes this is possible.) None did at kickoff, which proves nothing yet — the interesting moment is mid-processing.
 - [ ] Does `new_entries` empty out entirely?
 
 ## 4. Record fixtures
