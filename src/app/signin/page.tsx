@@ -59,11 +59,21 @@ function SignInError({ code }: { code: string }) {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sent?: string; error?: string }>
+  searchParams: Promise<{ provider?: string; error?: string }>
 }) {
-  const { sent, error } = await searchParams
+  const { provider, error } = await searchParams
   const session = await auth()
   if (session?.user) redirect('/send')
+
+  /**
+   * Auth.js redirects here after mailing the link, with `?provider=resend&type=email`.
+   *
+   * Keyed on its parameter rather than one of ours because `pages.verifyRequest` cannot
+   * carry a query string — see the note in `src/auth.ts`. The consequence of getting this
+   * wrong is mild and worth knowing: the page renders without the confirmation, so the
+   * owner is left unsure whether the email was sent.
+   */
+  const sent = Boolean(provider) && !error
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 p-6">

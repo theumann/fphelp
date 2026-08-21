@@ -24,9 +24,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     verificationTokensTable: verificationTokens,
   }),
   session: { strategy: 'database' },
+  /**
+   * All three point at the one page, which shows the right thing for the state it is in.
+   *
+   * None of them may carry a query string. Auth.js appends its own parameters with a `?`
+   * unconditionally — `@auth/core` builds the verify-request redirect as
+   * `${baseUrl}/verify-request?provider=…&type=…`, and the handler for that route then
+   * forwards to whatever `verifyRequest` names, appending the same pair again. Give it
+   * `/signin?sent=1` and the result is `/signin?sent=1?provider=resend&type=email`: two
+   * `?` in one URL, with `sent` parsing as the string `1?provider=resend`. It happened to
+   * work only because the page tested that value for truthiness rather than for `1`.
+   *
+   * So the page reads `provider`, which Auth.js always supplies, instead of a flag we
+   * cannot attach.
+   */
   pages: {
     signIn: '/signin',
-    verifyRequest: '/signin?sent=1',
+    verifyRequest: '/signin',
     error: '/signin',
   },
   providers: [
