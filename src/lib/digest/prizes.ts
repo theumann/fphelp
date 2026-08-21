@@ -1,7 +1,8 @@
 import { splitEvenly, toCents, type Cents } from './money'
 
 export interface PrizeConfig {
-  potTotal: string | number
+  /** `undefined` when the league has not set one. See `LeagueSettings.potTotal`. */
+  potTotal: string | number | undefined
   /** Fixed amount to each gameweek's winner. */
   gwWinnerAmount: string | number
   /** Fixed amount for the season's single highest gameweek score. */
@@ -13,6 +14,15 @@ export interface PrizeConfig {
 }
 
 export interface PotBreakdown {
+  /**
+   * Whether the league has actually set a pot.
+   *
+   * Carried alongside the figures rather than encoded as a null `potCents`, so callers
+   * that only want to do arithmetic keep working and callers that show the number to
+   * somebody are made to decide what "unknown" looks like.
+   */
+  potSet: boolean
+  /** Zero when unset — check `potSet` before showing this to anyone. */
   potCents: Cents
   /** Fixed commitments, which come off the top. */
   committedFixedCents: Cents
@@ -27,13 +37,20 @@ export interface PotBreakdown {
  * only surfaces at season end when the treasurer pays out.
  */
 export function computePot(config: PrizeConfig): PotBreakdown {
-  const potCents = toCents(config.potTotal)
+  // Narrowed by the condition rather than asserted, so a future change to the type is
+  // caught here instead of being waved through by a cast.
+  const potSet = config.potTotal !== undefined && config.potTotal !== ''
+  const potCents =
+    config.potTotal !== undefined && config.potTotal !== '' ? toCents(config.potTotal) : 0
   const committedFixedCents =
     toCents(config.gwWinnerAmount) * config.gameweekCount + toCents(config.seasonBestGwAmount)
 
   return {
+    potSet,
     potCents,
     committedFixedCents,
+    // Negative when unset, which is why `potSet` exists: a remainder of minus the fixed
+    // commitments is arithmetically true and meaningless to show.
     remainderCents: potCents - committedFixedCents,
   }
 }
@@ -51,9 +68,16 @@ export type ValidationError =
  */
 export function validatePrizeConfig(config: PrizeConfig, managerCount?: number): ValidationError[] {
   const errors: ValidationError[] = []
-  const { potCents, committedFixedCents } = computePot(config)
+  const { potSet, potCents, committedFixedCents } = computePot(config)
 
-  if (committedFixedCents > potCents) {
+  /**
+   * Only meaningful once there is a pot to exceed.
+   *
+   * Without this guard a league nobody has configured yet greets its new owner with
+   * "fixed prizes cost more than the pot holds" and a disabled Save button — an error
+   * about a decision they have not made, blocking them from making it.
+   */
+  if (potSet && committedFixedCents > potCents) {
     errors.push({ code: 'fixed-exceeds-pot', committedCents: committedFixedCents, potCents })
   }
 

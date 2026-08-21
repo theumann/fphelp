@@ -219,3 +219,48 @@ describe('toCents', () => {
     expect(toCents(1129.99)).toBe(112_999)
   })
 })
+
+/**
+ * An unset pot.
+ *
+ * A league is handed over before anyone has counted the money — members are still joining
+ * and paying — so "not set" has to survive as its own state rather than arriving as zero.
+ * Both failures here are silent: a validation error about a decision nobody has made, or a
+ * digest telling the league its pot is $0.00.
+ */
+describe('a pot nobody has set', () => {
+  const config = {
+    potTotal: undefined,
+    gwWinnerAmount: 15,
+    seasonBestGwAmount: 100,
+    rankPercentages: [40, 25, 15, 10, 6, 4],
+    gameweekCount: 38,
+  }
+
+  it('reports itself as unset rather than as zero', () => {
+    const pot = computePot(config)
+    expect(pot.potSet).toBe(false)
+    expect(pot.potCents).toBe(0)
+  })
+
+  it('still totals the fixed commitments, which do not depend on a pot', () => {
+    // 38 gameweeks x $15, plus $100 for the season's best gameweek.
+    expect(computePot(config).committedFixedCents).toBe(38 * 1500 + 10_000)
+  })
+
+  /** The one that would greet a new owner with an error about a decision they have not made. */
+  it('does not report the fixed prizes as exceeding it', () => {
+    const errors = validatePrizeConfig(config)
+    expect(errors.map((e) => e.code)).not.toContain('fixed-exceeds-pot')
+  })
+
+  it('still enforces the checks that do not depend on the amount', () => {
+    const errors = validatePrizeConfig({ ...config, rankPercentages: [50, 25] })
+    expect(errors.map((e) => e.code)).toContain('percentages-not-100')
+  })
+
+  it('reports fixed-exceeds-pot again as soon as a pot exists', () => {
+    const errors = validatePrizeConfig({ ...config, potTotal: 100 })
+    expect(errors.map((e) => e.code)).toContain('fixed-exceeds-pot')
+  })
+})

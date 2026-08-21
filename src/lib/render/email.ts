@@ -159,13 +159,13 @@ function renderGwResultsHtml(stats: DigestStats): string {
 
 function renderPrizeHtml(prize: PrizeSummary): string {
   const money = (c: Cents) => esc(formatCents(c, prize.currency))
-  const lines = [
-    `Pot: <strong>${money(prize.potCents)}</strong>`,
-    `Each GW winner: ${money(prize.gwWinnerCents)}`,
-    `Best GW of season: ${money(prize.seasonBestGwCents)}`,
-  ]
+  // Mirrors `renderPrizeStructure`: no pot means no pot line and no per-place shares.
+  const lines: string[] = []
+  if (prize.potSet) lines.push(`Pot: <strong>${money(prize.potCents)}</strong>`)
+  lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
+  lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
 
-  if (prize.rankPrizeCents.length > 0) {
+  if (prize.potSet && prize.rankPrizeCents.length > 0) {
     lines.push(
       `Final table: ${prize.rankPrizeCents.map((c, i) => `${i + 1}. ${money(c)}`).join(' · ')}`,
     )
@@ -211,15 +211,16 @@ function renderText(input: RenderEmailInput): string {
   }
 
   if (input.blocks.prizeStructure && input.prize) {
-    const money = (c: Cents) => formatCents(c, input.prize!.currency)
-    parts.push(
-      [
-        'Prizes',
-        `Pot: ${money(input.prize.potCents)}`,
-        `Each GW winner: ${money(input.prize.gwWinnerCents)}`,
-        `Best GW of season: ${money(input.prize.seasonBestGwCents)}`,
-      ].join('\n'),
-    )
+    const prize = input.prize
+    const money = (c: Cents) => formatCents(c, prize.currency)
+    // The third renderer of this block, alongside `renderPrizeHtml` here and WhatsApp's
+    // `renderPrizeStructure`. All three have to agree to omit a pot nobody has set — this
+    // one was missed until a test asked for the plaintext body as well as the HTML.
+    const lines = ['Prizes']
+    if (prize.potSet) lines.push(`Pot: ${money(prize.potCents)}`)
+    lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
+    lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
+    parts.push(lines.join('\n'))
   }
 
   if (input.signature?.trim()) parts.push(input.signature.trim())

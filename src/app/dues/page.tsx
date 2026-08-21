@@ -38,7 +38,7 @@ export default async function DuesPage() {
         }))}
         initialPaid={Object.fromEntries(paid)}
         entryFeeCents={settings.entryFee !== undefined ? toCents(settings.entryFee) : null}
-        potCents={toCents(settings.potTotal)}
+        potCents={settings.potTotal !== undefined ? toCents(settings.potTotal) : null}
         currency={settings.currency}
       />
     </main>

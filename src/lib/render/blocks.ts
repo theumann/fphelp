@@ -17,6 +17,9 @@ export interface BlockSelection {
 
 export interface PrizeSummary {
   currency: string
+  /** False when the league has not set a pot. Zero is a figure; unset is not. */
+  potSet: boolean
+  /** Zero when unset — never render this without checking `potSet`. */
   potCents: Cents
   gwWinnerCents: Cents
   seasonBestGwCents: Cents
@@ -98,16 +101,24 @@ export function renderGwResults(stats: DigestStats): string {
   return lines.join('\n')
 }
 
+/**
+ * The prize block.
+ *
+ * Everything derived from the pot is omitted when there isn't one, rather than printed as
+ * `$0.00`. The fixed prizes stay: they are amounts per winner rather than shares of a
+ * total, so a league that has agreed its rules but not yet counted the money can still say
+ * what a gameweek is worth without publishing a pot of nothing.
+ */
 export function renderPrizeStructure(prize: PrizeSummary): string {
   const money = (c: Cents) => formatCents(c, prize.currency)
-  const lines = [
-    '*Prizes*',
-    `Pot: ${money(prize.potCents)}`,
-    `Each GW winner: ${money(prize.gwWinnerCents)}`,
-    `Best GW of season: ${money(prize.seasonBestGwCents)}`,
-  ]
+  const lines = ['*Prizes*']
 
-  if (prize.rankPrizeCents.length > 0) {
+  if (prize.potSet) lines.push(`Pot: ${money(prize.potCents)}`)
+  lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
+  lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
+
+  // Each place's share is a slice of the remainder, so it is unknowable without a pot.
+  if (prize.potSet && prize.rankPrizeCents.length > 0) {
     const places = prize.rankPrizeCents.map((c, i) => `${i + 1}. ${money(c)}`).join('  ')
     lines.push(`Final table: ${places}`)
   }

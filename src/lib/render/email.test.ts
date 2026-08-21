@@ -32,6 +32,7 @@ const ALL: BlockSelection = { overallStandings: true, gwResults: true, prizeStru
 
 const prize: PrizeSummary = {
   currency: 'USD',
+  potSet: true,
   potCents: 180000,
   gwWinnerCents: 1500,
   seasonBestGwCents: 10000,
@@ -135,5 +136,41 @@ describe('renderEmail', () => {
 
   it('renders an empty body without an empty paragraph', () => {
     expect(render({ body: '   ' }).html).not.toContain('<p style="margin:0 0 12px;"></p>')
+  })
+})
+
+/**
+ * The prize block with no pot set.
+ *
+ * Mirrors the WhatsApp case in `blocks.test.ts`, and matters more here: email is the
+ * channel this league actually reads, it goes out server-side with no chance to abandon
+ * it at a chat picker, and the HTML renderer is a separate code path that would happily
+ * print `$0.00` on its own.
+ */
+describe('renderEmail with an unset pot', () => {
+  const unset: PrizeSummary = { ...prize, potSet: false, potCents: 0 }
+
+  it('omits the pot rather than claiming it is zero, in both renderings', () => {
+    const { html, text } = render({ prize: unset, blocks: ALL })
+
+    for (const body of [html, text]) {
+      expect(body).not.toContain('Pot:')
+      expect(body).not.toContain('$0.00')
+    }
+  })
+
+  it('still states the fixed prizes, which do not depend on a pot', () => {
+    const { html, text } = render({ prize: unset, blocks: ALL })
+
+    for (const body of [html, text]) {
+      expect(body).toContain('Each GW winner: $15.00')
+      expect(body).toContain('Best GW of season: $100.00')
+    }
+  })
+
+  it('states the pot when there is one', () => {
+    const { html, text } = render({ prize, blocks: ALL })
+
+    for (const body of [html, text]) expect(body).toContain('$1,800.00')
   })
 })

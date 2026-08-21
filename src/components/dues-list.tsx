@@ -19,7 +19,8 @@ interface Props {
   initialPaid: Record<number, boolean>
   /** Cents. Null when the owner hasn't recorded an entry fee. */
   entryFeeCents: number | null
-  potCents: number
+  /** Null until the league sets a pot — the collected total is still worth showing. */
+  potCents: number | null
   currency: string
 }
 
@@ -82,11 +83,12 @@ export function DuesList({
             </div>
             <div className="mt-1 flex justify-between border-t border-neutral-300 pt-1 dark:border-neutral-700">
               <dt>Pot entered at setup</dt>
-              <dd className="tabular-nums">{money(potCents)}</dd>
+              <dd className="tabular-nums">{potCents === null ? 'Not set' : money(potCents)}</dd>
             </div>
             {/* The pot is the owner's figure, not a derived one — so these can differ,
-                and the difference is exactly what the treasurer is chasing. */}
-            {collectedCents !== potCents && (
+                and the difference is exactly what the treasurer is chasing. Nothing to
+                chase until somebody has entered one, and `$0.00` would invent a target. */}
+            {potCents !== null && collectedCents !== potCents && (
               <p className="mt-2 text-xs text-neutral-500">
                 {collectedCents < potCents
                   ? `${money(potCents - collectedCents)} of the pot is not yet collected.`

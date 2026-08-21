@@ -45,7 +45,7 @@ const num = (s: string) => (s.trim() === '' ? 0 : Number(s))
 
 function toDraft(s: LeagueSettings): Draft {
   return {
-    potTotal: s.potTotal ? String(s.potTotal) : '',
+    potTotal: s.potTotal !== undefined ? String(s.potTotal) : '',
     currency: s.currency,
     entryFee: s.entryFee !== undefined ? String(s.entryFee) : '',
     gwWinnerAmount: String(s.gwWinnerAmount),
@@ -56,7 +56,8 @@ function toDraft(s: LeagueSettings): Draft {
 
 function toSettings(d: Draft): LeagueSettings {
   return {
-    potTotal: num(d.potTotal),
+    // Empty means unset, not zero — see `LeagueSettings.potTotal`.
+    potTotal: d.potTotal.trim() === '' ? undefined : num(d.potTotal),
     currency: d.currency,
     entryFee: d.entryFee.trim() === '' ? undefined : num(d.entryFee),
     gwWinnerAmount: num(d.gwWinnerAmount),
@@ -219,16 +220,18 @@ export function SetupForm({
 
         {/* The arithmetic that is easy to get wrong: fixed prizes come off the top. */}
         <dl className="rounded-lg bg-surface-muted p-3">
-          <SummaryRow label="Pot" value={money(pot.potCents)} />
+          <SummaryRow label="Pot" value={pot.potSet ? money(pot.potCents) : 'Not set'} />
           <SummaryRow
             label={`Fixed prizes (${gameweekCount} × ${money(summary.gwWinnerCents)} + best GW)`}
             value={`−${money(pot.committedFixedCents)}`}
           />
+          {/* Without a pot the remainder is minus the fixed commitments — true, and a
+              figure nobody should read. */}
           <SummaryRow
             label="Remainder for final table"
-            value={money(pot.remainderCents)}
+            value={pot.potSet ? money(pot.remainderCents) : '—'}
             emphasis
-            tone={pot.remainderCents < 0 ? 'danger' : undefined}
+            tone={pot.potSet && pot.remainderCents < 0 ? 'danger' : undefined}
           />
         </dl>
       </Card>
@@ -238,7 +241,7 @@ export function SetupForm({
         hint="Percentages of the remainder, not of the pot."
         aside={
           <span className={pctTotal === 100 ? '' : 'font-medium text-danger'}>
-            {pctTotal}% of {money(pot.remainderCents)}
+            {pctTotal}% of {pot.potSet ? money(pot.remainderCents) : 'the remainder'}
           </span>
         }
       >
@@ -261,7 +264,7 @@ export function SetupForm({
                 </span>
               </div>
               <span className="w-24 shrink-0 text-right text-sm tabular-nums">
-                {money(summary.rankPrizeCents[i] ?? 0)}
+                {pot.potSet ? money(summary.rankPrizeCents[i] ?? 0) : '—'}
               </span>
               <Button
                 variant="danger"
