@@ -70,6 +70,47 @@ railway ssh --service fphelp-app
 
 There is no `psql` in the image; use Node and `pg`, which are already there.
 
+### Adding or removing an owner from the shell
+
+Setup can do both, so this is for the cases it can't reach:
+
+- **You cannot remove yourself in the UI.** `removeOwnerAction` refuses it, so whoever set
+  the league up and does not want to appear as one of its owners has to leave from here —
+  or ask a co-owner to remove them.
+- **Both owners lose access.** Membership is only granted from inside the app, so there is
+  no way back through the UI.
+
+Ownership is two rows. `users` is what `src/auth.ts` allowlists for sign-in; `league_users`
+is what every page and action checks. Adding needs both; **removing deletes only the
+second**, because `messages.created_by` and `deliveries.sent_by` are `set null` and
+deleting the account would erase who sent past digests.
+
+Inside `railway ssh --service fphelp-app`, first see who is there:
+
+```bash
+node -e 'const{Client}=require("pg");const c=new Client({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});c.connect().then(()=>c.query("select u.email, u.email_verified is not null as has_signed_in from league_users lu join users u on u.id=lu.user_id order by lu.created_at")).then(r=>r.rows.forEach(x=>console.log(x.email, x.has_signed_in?"(has signed in)":"(never signed in)"))).then(()=>c.end()).catch(e=>{console.error(e.message);process.exit(1)})'
+```
+
+Add one — idempotent, so re-running it is safe:
+
+```bash
+node -e 'const{Client}=require("pg");const c=new Client({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});const email="them@example.com";c.connect().then(()=>c.query("insert into users (email) values ($1) on conflict (email) do nothing",[email])).then(()=>c.query("insert into league_users (league_id, user_id) select l.id, u.id from leagues l, users u where u.email=$1 on conflict do nothing",[email])).then(r=>console.log(r.rowCount?"added":"already an owner")).then(()=>c.end()).catch(e=>{console.error(e.message);process.exit(1)})'
+```
+
+Remove one — drops the membership, keeps the account and its authorship:
+
+```bash
+node -e 'const{Client}=require("pg");const c=new Client({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});const email="me@example.com";c.connect().then(()=>c.query("delete from league_users where user_id=(select id from users where email=$1)",[email])).then(r=>console.log("removed",r.rowCount,"membership(s)")).then(()=>c.end()).catch(e=>{console.error(e.message);process.exit(1)})'
+```
+
+**`BOOTSTRAP_OWNER_EMAIL` undoes a removal on the next deploy.** `preDeployCommand` runs
+`db:bootstrap` every time, which re-adds whatever address that variable names — so removing
+yourself while it still points at you means reappearing in the owners list the next time
+anything ships, with no explanation for the people watching.
+
+Point it at an owner who *should* always exist. Then it stops being a footgun and becomes
+their break-glass: if they lose access, a redeploy restores it.
+
 ### Deleting sessions
 
 A session can end up belonging to something that is not a person. Sign-in links are
