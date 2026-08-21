@@ -67,7 +67,7 @@ export function renderSignInEmail(url: string): SignInEmail {
     `<p style="margin:0 0 20px;font:400 12px/1.5 ${FONT};color:${MUTED};word-break:break-all">` +
     `${href}</p>` +
     `<p style="margin:0;padding-top:16px;border-top:1px solid #e5e5e5;font:400 12px/1.5 ${FONT};color:${MUTED}">` +
-    `${escapeHtml(EXPIRY_NOTE)} If you didn't ask to sign in, ignore this email — nothing ` +
+    `${escapeHtml(EXPIRY_NOTE)} If you didn't ask to sign in, ignore this email. Nothing ` +
     `happens until the link is opened.</p>` +
     `</div>`
 

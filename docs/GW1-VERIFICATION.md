@@ -29,20 +29,22 @@ The second historical gap is now partly covered: the capture job upserts `manage
 
 Diff real payloads against the ⚠️ rows in [ARCHITECTURE.md](../ARCHITECTURE.md#endpoint-reference).
 
-- [ ] **`standings.results[]` element fields** — `entry`, `entry_name`, `player_name`, `rank`, `last_rank`, `rank_sort`, `total`, `event_total`. Never observed live; the only fields still taken purely on trust.
-- [ ] **`event-status.leagues`** — confirm it really is the string `"Updated"`. Still `""` 40 minutes into GW1, so the value remains unobserved. The whole send trigger depends on it.
-- [x] **`status[].bonus_added`** — the field exists. Confirmed 2026-08-21 18:09Z, the first time `status` has ever been non-empty. **Not yet seen flipping to `true`** — every row was `false` while matches were unplayed, which is correct; re-check as they finish.
-- [ ] **`history.current[]` element fields** — `event`, `points`, `total_points`, `rank`, `overall_rank`, `points_on_bench`, `event_transfers_cost`.
+- [x] **`standings.results[]` element fields** — confirmed live 2026-08-21 23:29Z, and the community-typed shape was **wrong in two ways**: there is no `id` (declared required, never sent — nothing read it, so nothing broke), and there is an undocumented `club_badge_src`, null for every manager here. Everything else matched. `last_rank` is `0` for every manager after GW1, so rank movement must read `0` as "no previous rank" rather than as a climb from position zero — it does.
+- [ ] **`event-status.leagues`** — confirm it really is the string `"Updated"`. **Still unobserved**, and now known to have a third value: `""` before a gameweek, `"Updating"` while one is played (2026-08-21 23:29Z), and presumably `"Updated"` after. This is the last unverified thing the send trigger depends on. `"Updating"` also proves the field is not a two-state flag — a truthiness test would have opened the gate mid-gameweek.
+- [x] **`status[].bonus_added`** — the field exists. Confirmed 2026-08-21 18:09Z, the first time `status` has ever been non-empty. **Not yet seen flipping to `true`**: still `false` at 23:29Z on a match day whose games had finished and whose scores were in. That gap between "scores landed" and "bonus applied" is the entire reason this gate exists, and it is now observed rather than assumed. `status[].points` goes `""` → `"p"` when a day is played.
+- [x] **`history.current[]` element fields** — confirmed 2026-08-21 23:29Z. Every field we map is present, plus several we do not use (`rank_sort`, `percentile_rank`, `overall_rank_percentage`, `bank`, `value`, `event_transfers`). `past[]` is populated for a returning manager — 7 seasons on the one sampled.
 
 ## 3. Watch the standings / new_entries transition
 
 The most interesting moment in the whole season for this app, and it only happens once.
 
-**Not at kickoff.** Checked 40 minutes past the GW1 deadline: `standings.results` was still `0` and all 17 managers were still in `new_entries`, none in both. So the move happens when the gameweek is *processed*, not when it starts — the observation window is Sunday evening through Tuesday, alongside §7.
+**Answered 2026-08-21, 23:29Z**, after the first day's matches were scored — earlier than expected. At kickoff (18:09Z) `standings.results` was still `0` with all 17 in `new_entries`; five hours later the move had completed.
 
-- [ ] Do the 17 managers move from `new_entries` into `standings`?
-- [ ] Does any manager appear in **both** at once? (The dedupe-on-`entry` rule assumes this is possible.) None did at kickoff, which proves nothing yet — the interesting moment is mid-processing.
-- [ ] Does `new_entries` empty out entirely?
+- [x] Do the 17 managers move from `new_entries` into `standings`? **Yes**, all 17.
+- [ ] Does any manager appear in **both** at once? **Not observed** — 0 in both, before and after. The dedupe-on-`entry` rule is therefore still unexercised. Keep it: costing nothing and being unproven is a better position than removing it on one weekend's evidence, since a manager joining mid-gameweek is exactly the case that would produce it.
+- [x] Does `new_entries` empty out entirely? **Yes**, straight to 0.
+
+Also confirmed here, and the most valuable line in this document: the **league average is computed, not read**. `leagueAverage()` returned **9** while `events[0].average_entry_score` was **12** — two different numbers, and the app uses the right one.
 
 ## 4. Record fixtures
 

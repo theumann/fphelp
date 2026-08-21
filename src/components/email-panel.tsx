@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 
-import type { BlockSelection } from '@/lib/render/blocks'
+import { dependsOnGameweek, type BlockSelection } from '@/lib/render/blocks'
+
+import { HIDE_RECIPIENTS_COPY } from './ui'
 import type { RenderedEmail } from '@/lib/render/email'
 
 interface Props {
@@ -11,6 +13,8 @@ interface Props {
   blocks: BlockSelection
   onBlocksChange: (blocks: BlockSelection) => void
   recipientCount: number
+  /** False while the gameweek's figures are provisional; the blocks are withheld, not the send. */
+  statsReady: boolean
   /** A prior delivery for this gameweek, so the state survives a reload. */
   sentAt?: string
   error: string | null
@@ -24,7 +28,7 @@ interface Props {
 
 const LABELS: { key: keyof BlockSelection; label: string }[] = [
   { key: 'gwResults', label: 'Gameweek results' },
-  { key: 'overallStandings', label: 'Full standings table' },
+  { key: 'overallStandings', label: 'Season standings' },
   { key: 'prizeStructure', label: 'Prize structure' },
 ]
 
@@ -43,6 +47,7 @@ export function EmailPanel({
   blocks,
   onBlocksChange,
   recipientCount,
+  statsReady,
   sentAt,
   error,
   canSend,
@@ -61,7 +66,7 @@ export function EmailPanel({
     >
       {recipientCount === 0 && canSend && (
         <p className="rounded-lg bg-warning-surface p-3 text-sm text-warning">
-          No addresses yet — add them in Setup. The FPL API doesn&apos;t provide them, so the
+          No addresses yet - add them in Setup. The FPL API doesn&apos;t provide them, so the
           list is yours to keep.
         </p>
       )}
@@ -87,9 +92,7 @@ export function EmailPanel({
             <span className="flex flex-col gap-0.5">
               <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
               <span className="text-xs leading-relaxed text-muted">
-                {hideRecipients
-                  ? 'Members can only reply to you, not to each other.'
-                  : 'Everyone sees the whole list, so replying to all reaches the league.'}
+                {hideRecipients ? HIDE_RECIPIENTS_COPY.on : HIDE_RECIPIENTS_COPY.off}
               </span>
             </span>
           </label>
@@ -99,43 +102,47 @@ export function EmailPanel({
               {hideRecipientsError}
             </p>
           )}
-
-          {!hideRecipients && (
-            <p className="text-xs leading-relaxed text-warning">
-              Every member will see all {recipientCount}{' '}
-              {recipientCount === 1 ? 'address' : 'addresses'} from this send onward.
-              Turning this back on doesn&apos;t un-send them.
-            </p>
-          )}
         </div>
       )}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Include</legend>
+
         <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {LABELS.map(({ key, label }) => (
-            <label key={key} className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={blocks[key]}
-                onChange={(e) => onBlocksChange({ ...blocks, [key]: e.target.checked })}
-                className="size-4 accent-accent"
-              />
-              {label}
-            </label>
-          ))}
+          {LABELS.map(({ key, label }) => {
+            // Same rule as the WhatsApp tab: only the blocks built from scores wait.
+            const withheld = !statsReady && dependsOnGameweek(key)
+            return (
+              <label
+                key={key}
+                className={`flex items-center gap-2 text-sm ${
+                  withheld ? 'opacity-50' : 'cursor-pointer'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  disabled={withheld}
+                  checked={!withheld && blocks[key]}
+                  onChange={(e) => onBlocksChange({ ...blocks, [key]: e.target.checked })}
+                  className="size-4 accent-accent"
+                />
+                {label}
+              </label>
+            )
+          })}
         </div>
-        <p className="text-xs text-muted">
-          Separate from the WhatsApp selection — no length limit here, so the full table
-          fits.
-        </p>
+
+        {!statsReady && (
+          <p className="rounded-lg bg-warning-surface p-3 text-xs leading-relaxed text-warning">
+            Gameweek in progress. Results and standings will be available when we have the
+            current gameweek&apos;s final results.
+          </p>
+        )}
       </fieldset>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="min-w-0 truncate text-xs text-muted">
-            Subject: <span className="text-foreground">{rendered.subject}</span>
-          </span>
+          <span className="text-sm font-medium">Message preview</span>
           <button
             type="button"
             onClick={() => setShowHtml(!showHtml)}
@@ -145,22 +152,31 @@ export function EmailPanel({
           </button>
         </div>
 
-        {showHtml ? (
-          /* An iframe, not dangerouslySetInnerHTML: the email's inline styles must not
-             leak into the app, and the app's stylesheet must not flatter the preview
-             into looking better than it will in a mail client. `sandbox` with no
-             allow-scripts is belt and braces — the HTML is ours and script-free. */
-          <iframe
-            title="Email preview"
-            sandbox=""
-            srcDoc={rendered.html}
-            className="h-96 w-full rounded-lg border border-line bg-white"
-          />
-        ) : (
-          <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-muted p-3 text-xs">
-            {rendered.text || 'Nothing to send yet.'}
-          </pre>
-        )}
+        {/* The subject sits inside the frame, above a rule, because that is where it sits
+            in the thing being previewed — a mail client shows it attached to the message,
+            not as a form field beside it. */}
+        <div className="overflow-hidden rounded-lg border border-line">
+          <p className="truncate border-b border-line bg-surface-muted px-3 py-2 text-xs text-muted">
+            Subject: <span className="text-foreground">{rendered.subject}</span>
+          </p>
+
+          {showHtml ? (
+            /* An iframe, not dangerouslySetInnerHTML: the email's inline styles must not
+               leak into the app, and the app's stylesheet must not flatter the preview
+               into looking better than it will in a mail client. `sandbox` with no
+               allow-scripts is belt and braces — the HTML is ours and script-free. */
+            <iframe
+              title="Email preview"
+              sandbox=""
+              srcDoc={rendered.html}
+              className="block h-96 w-full bg-white"
+            />
+          ) : (
+            <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words bg-surface-muted p-3 text-xs">
+              {rendered.text || 'Nothing to send yet.'}
+            </pre>
+          )}
+        </div>
       </div>
 
       {sentAt && (
@@ -169,7 +185,7 @@ export function EmailPanel({
 
       {error && (
         <p role="alert" className="rounded-lg bg-danger-surface p-3 text-sm text-danger">
-          Not sent — {error}
+          Not sent - {error}
         </p>
       )}
     </div>

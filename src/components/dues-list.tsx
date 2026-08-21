@@ -92,7 +92,7 @@ export function DuesList({
               <p className="mt-2 text-xs text-neutral-500">
                 {collectedCents < potCents
                   ? `${money(potCents - collectedCents)} of the pot is not yet collected.`
-                  : `Collected exceeds the pot by ${money(collectedCents - potCents)} — check the pot figure in setup.`}
+                  : `Collected exceeds the pot by ${money(collectedCents - potCents)} - check the pot figure in setup.`}
               </p>
             )}
           </>
@@ -127,8 +127,9 @@ export function DuesList({
       </ul>
 
       <p className="text-xs text-neutral-500">
-        Tracks money coming in. Prize money owed out is computed from the final standings
-        — paying it out isn&apos;t tracked here yet.
+        Tracks money coming in. Prize money owed out is computed from the final standings.
+        <br />
+        Paying it out isn&apos;t tracked in the current app&apos;s version.
       </p>
     </div>
   )

@@ -9,7 +9,7 @@ import {
   setHideRecipientsAction,
 } from '@/app/setup/actions'
 
-import { Alert, Button, Card, inputClass } from './ui'
+import { Alert, Button, Card, HIDE_RECIPIENTS_COPY, inputClass } from './ui'
 
 export interface Recipient {
   id: string
@@ -122,8 +122,7 @@ export function RecipientsList({
               className={`${inputClass} text-sm`}
             />
             <p className="text-xs leading-relaxed text-muted">
-              Paste as many as you like — separated by commas, semicolons or new lines.
-              Names in <code className="font-mono">Name &lt;address&gt;</code> form are kept.
+              Paste as many as you like, separated by commas, semicolons or new lines.
             </p>
             <Button
               variant="primary"
@@ -172,20 +171,10 @@ export function RecipientsList({
               <span className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
                 <span className="text-xs leading-relaxed text-muted">
-                  {hide
-                    ? 'On: nobody sees anyone else’s address, and members can only reply to you — not to each other.'
-                    : 'Off: everyone sees the whole list, so replying to all reaches the league. This is what makes the digest a conversation.'}
+                  {hide ? HIDE_RECIPIENTS_COPY.on : HIDE_RECIPIENTS_COPY.off}
                 </span>
               </span>
             </label>
-
-            {!hide && (
-              <p className="text-xs leading-relaxed text-warning">
-                Every member will see all {recipients.length}{' '}
-                {recipients.length === 1 ? 'address' : 'addresses'} from the next send
-                onward. Turning this back on afterwards doesn&apos;t un-send them.
-              </p>
-            )}
           </div>
 
           <div>

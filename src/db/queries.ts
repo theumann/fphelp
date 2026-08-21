@@ -605,8 +605,8 @@ export async function ownerSignature(
     : undefined
 
   return team
-    ? `${who} — ${team} Manager and ${leagueName} Admin`
-    : `${who} — ${leagueName} Admin`
+    ? `${who} - ${team} Manager and ${leagueName} Admin`
+    : `${who} - ${leagueName} Admin`
 }
 
 /**

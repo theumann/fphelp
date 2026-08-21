@@ -9,7 +9,7 @@ import { expect, test, useSession } from './support/test'
  * and nothing about the page looks wrong when it happens.
  */
 
-const STANDINGS = { name: /Overall standings/ }
+const STANDINGS = { name: /Season standings/ }
 const PRIZES = { name: /Prize structure/ }
 
 test('a block toggle survives leaving the page and coming back', async ({ ownerPage }) => {
@@ -142,8 +142,9 @@ test.describe('reply model on the compose page', () => {
     await page.goto('/send')
 
     await page.getByRole('checkbox', { name: /Hide recipients/ }).uncheck()
+    await expect(page.getByText(/reaches all league members/)).toBeVisible()
+    // The send bar has to agree with the control that was just changed.
     await expect(page.getByText(/Everyone sees the list and can reply to all/)).toBeVisible()
-    await expect(page.getByText(/see all 2 addresses/)).toBeVisible()
 
     // One value, two views: the change has to be visible in Setup, not just here.
     await page.goto('/setup')

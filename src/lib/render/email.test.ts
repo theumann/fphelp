@@ -53,7 +53,7 @@ function render(over: Partial<RenderEmailInput> = {}) {
 
 describe('renderEmail', () => {
   it('subjects the email with the league and gameweek', () => {
-    expect(render().subject).toBe("The Sunday League — Gameweek 3")
+    expect(render().subject).toBe("The Sunday League - Gameweek 3")
   })
 
   it('always produces a plaintext alternative', () => {

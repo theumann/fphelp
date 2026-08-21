@@ -16,12 +16,7 @@ import {
 import { demoRoster } from '@/lib/demo'
 import { computeDigestStats } from '@/lib/digest/stats'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
-import {
-  type ReadinessReason,
-  gameweekCount,
-  isGameweekReady,
-  lastFinishedGameweek,
-} from '@/lib/fpl/gameweek'
+import { gameweekCount, sendGate } from '@/lib/fpl/gameweek'
 import { buildRoster } from '@/lib/fpl/roster'
 import { REFERENCE_LEAGUE } from '@/lib/league-config'
 import { DEFAULT_SETTINGS, summarise } from '@/lib/league-settings'
@@ -29,40 +24,6 @@ import type { BlockSelection } from '@/lib/render/blocks'
 
 // Live FPL data — never serve a cached table as this week's result.
 export const dynamic = 'force-dynamic'
-
-/**
- * Why the gameweek isn't safe to send yet. Phrased as "what FPL is still doing" rather
- * than as an error — nothing has gone wrong, the data just isn't settled.
- */
-const NOT_READY_REASONS: Record<Exclude<ReadinessReason, 'ready'>, string> = {
-  'not-finished': 'the gameweek is still in progress.',
-  'no-event-status': "FPL isn't reporting a status for this gameweek yet.",
-  'bonus-pending': "bonus points haven't been applied to every match yet.",
-  'leagues-not-updated': "match points are in, but FPL hasn't recalculated the league tables yet.",
-  'data-not-checked': "FPL hasn't finished verifying the gameweek's data.",
-}
-
-function NotReady({
-  gameweek,
-  reason,
-}: {
-  gameweek: number
-  reason: ReadinessReason
-}) {
-  return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-lg font-semibold">GW{gameweek} isn&apos;t final yet</h1>
-      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-        The standings can still change, because{' '}
-        {reason === 'ready' ? 'the gameweek is settling.' : NOT_READY_REASONS[reason]}
-      </p>
-      <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
-        Sending now would post a table that looks right and isn&apos;t. This usually clears
-        within a few hours of the last match — reload then.
-      </p>
-    </main>
-  )
-}
 
 export default async function SendPage({
   searchParams,
@@ -94,8 +55,8 @@ export default async function SendPage({
         <h1 className="text-lg font-semibold">Couldn&apos;t reach the FPL API</h1>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
           {blocked
-            ? 'The API appears to be blocking this host. This is the Cloudflare datacenter-IP risk — see ARCHITECTURE.md; the fix is an egress proxy, not a redeploy.'
-            : 'The request failed. This is usually transient — the FPL API goes down around deadlines.'}
+            ? 'The API appears to be blocking this host. This is the Cloudflare datacenter-IP risk - see ARCHITECTURE.md; the fix is an egress proxy, not a redeploy.'
+            : 'The request failed. This is usually transient - the FPL API goes down around deadlines.'}
         </p>
         <pre className="mt-4 overflow-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-900">
           {err instanceof Error ? err.message : String(err)}
@@ -108,30 +69,20 @@ export default async function SendPage({
   // truncation path can be tested before GW1. Remove once the season starts.
   const roster = demo ? demoRoster(Number(demo) > 1 ? Number(demo) : 18) : buildRoster(standings)
 
-  const finished = lastFinishedGameweek(bootstrap)
-
   /**
-   * The readiness gate. `finished` flips before bonus points are applied and league
-   * tables recalculate on their own schedule, so a gameweek that reports finished can
-   * still be carrying pre-bonus scores — a table that looks entirely normal and is
-   * wrong. Once the owner taps through to WhatsApp that is unrecoverable, so this
-   * blocks composing rather than warning.
+   * The readiness gate, decided in `sendGate` so it can be tested — this page cannot be.
    *
-   * Two states are deliberately NOT gated:
-   *   - demo mode, which is synthetic and exists to test message length
-   *   - pre-season, where no gameweek has finished at all. Nobody has scored, so there
-   *     are no stale numbers to show; the roster renders score-less, which is a
-   *     documented state (the whole league is in it before GW1).
+   * It withholds the generated blocks rather than the whole page. Writing to the group
+   * mid-week is a normal thing for an owner to do and nothing about it is unsafe; what
+   * cannot be undone is attaching a table of provisional scores to it. Blocking the page
+   * outright stopped both, and the one it needed to stop was the second.
+   *
+   * Demo mode is exempt because it is synthetic and exists to test message length.
    */
-  if (!demo && finished !== null) {
-    const readiness = isGameweekReady(bootstrap, eventStatus, finished)
-    if (!readiness.ready) {
-      return <NotReady gameweek={finished} reason={readiness.reason} />
-    }
-  }
+  const gate = sendGate(bootstrap, eventStatus)
+  const statsReady = demo ? true : gate.statsReady
 
-  // Pre-season there is no finished gameweek; show GW1 so the page still works.
-  const gameweek = demo ? 5 : (finished ?? 1)
+  const gameweek = demo ? 5 : gate.gameweek
   const stats = computeDigestStats(roster, gameweek)
 
   /**
@@ -150,7 +101,7 @@ export default async function SendPage({
   // Demo mode never gets the email panel: there is no league row to read the opt-in
   // from, and no recipient list that a synthetic roster could correspond to.
   let email
-  let signature = `${session.user.name ?? session.user.email} — ${standings.league.name} Admin`
+  let signature = `${session.user.name ?? session.user.email} - ${standings.league.name} Admin`
   // Demo mode has no league, so no pot — `undefined` rather than 0, which would render a
   // prize block claiming the pot is nothing.
   let prize = summarise(
@@ -218,6 +169,7 @@ export default async function SendPage({
   return (
     <main>
       <Composer
+        statsReady={statsReady}
         stats={stats}
         prize={prize}
         signature={signature}

@@ -39,7 +39,7 @@ export default async function Home() {
 
         <p className="text-balance text-base leading-relaxed text-muted">
           Standings, results and the money pot for your private Fantasy Premier League
-          group — drafted for you, sent by you.
+          group - drafted for you, sent by you.
         </p>
 
         <Link
@@ -52,7 +52,7 @@ export default async function Home() {
         {/* Said plainly, because the alternative is someone requesting a link and being
             refused with no idea why. Membership is granted by an owner, never by signing up. */}
         <p className="text-sm text-faint">
-          For league owners. Access is granted by an existing owner — there is no sign-up.
+          For league owners. Access is granted by an existing owner. There is no sign-up.
         </p>
       </div>
     </main>

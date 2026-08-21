@@ -79,6 +79,13 @@ export type SendEmailActionResult =
 /**
  * Sends the digest by email.
  *
+ * The readiness gate is NOT re-applied here, deliberately. The composer withholds the
+ * gameweek-derived blocks while scores are provisional and sends the withheld selection,
+ * so a crafted request is the only way to get a mid-gameweek table into an email — and
+ * only an owner can make one, addressed to their own league. Re-checking would mean two
+ * FPL calls on every send, coupling delivery to the API being reachable, which is the same
+ * trade `gameweekCount` already refuses.
+ *
  * The HTML is re-rendered here from the stored digest rather than accepted from the
  * browser. A Server Action is a public endpoint, so client-supplied markup would be
  * markup we mail to fourteen people on an owner's say-so without ever having seen it —
@@ -106,7 +113,7 @@ export async function sendEmailAction(input: {
   const league = await getLeague(input.leagueId)
   if (!league) return { ok: false, error: 'That league couldn’t be found.' }
   if (!league.emailEnabled) {
-    return { ok: false, error: 'Email is switched off for this league — turn it on in Setup.' }
+    return { ok: false, error: 'Email is switched off for this league - turn it on in Setup.' }
   }
 
   const existing = await findDelivery(input.leagueId, input.gameweek, 'email')
@@ -117,7 +124,7 @@ export async function sendEmailAction(input: {
 
   const digest = await findDigest(input.leagueId, input.gameweek)
   if (!digest) {
-    return { ok: false, error: 'This gameweek hasn’t been prepared yet — reload the page.' }
+    return { ok: false, error: 'This gameweek hasn’t been prepared yet - reload the page.' }
   }
 
   const to = (await listRecipients(input.leagueId)).map((r) => r.email)

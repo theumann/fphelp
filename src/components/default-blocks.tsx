@@ -9,7 +9,7 @@ import { Card } from './ui'
 
 const BLOCKS: { key: keyof BlockSelection; label: string; hint: string }[] = [
   { key: 'gwResults', label: 'Gameweek results', hint: 'Winner, average, riser and faller' },
-  { key: 'overallStandings', label: 'Overall standings', hint: 'Full table with movement' },
+  { key: 'overallStandings', label: 'Season standings', hint: 'Full table with movement' },
   { key: 'prizeStructure', label: 'Prize structure', hint: 'Pot and prize breakdown' },
 ]
 
@@ -66,13 +66,6 @@ export function DefaultBlocks({
           </li>
         ))}
       </ul>
-
-      {/* The standings block is the one that can eat the whole WhatsApp budget, so it is
-          worth saying here rather than leaving it to be discovered in the composer. */}
-      <p className="text-xs leading-relaxed text-muted">
-        Email always includes the standings — only the WhatsApp message has a length budget
-        to spend.
-      </p>
     </Card>
   )
 }

@@ -13,6 +13,19 @@ import type { ComponentProps, ReactNode } from 'react'
  * Components as well as client ones.
  */
 
+/**
+ * How the reply model reads, in both places it is offered.
+ *
+ * Shared rather than written twice: this exact setting already appears in Setup and in the
+ * composer's email tab, and the block labels next to it drifted into three different names
+ * before anyone noticed. Copy describing an irreversible choice is the last thing that
+ * should say two things.
+ */
+export const HIDE_RECIPIENTS_COPY = {
+  on: 'On: nobody sees anyone else’s address, and members can only reply to you.',
+  off: 'Off: everyone sees the whole list, so replying to all reaches all league members. This makes the digest a conversation.',
+} as const
+
 /** Page shell. Max width is the phone-first column every page already used. */
 export function Page({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderPrizeStructure, type PrizeSummary } from './blocks'
+import {
+  NO_BLOCKS,
+  dependsOnGameweek,
+  effectiveBlocks,
+  renderPrizeStructure,
+  type BlockSelection,
+  type PrizeSummary,
+} from './blocks'
 
 const base: PrizeSummary = {
   currency: 'USD',
@@ -45,5 +52,45 @@ describe('renderPrizeStructure', () => {
 
     expect(text).toContain('Each GW winner: $15.00')
     expect(text).toContain('Best GW of season: $100.00')
+  })
+})
+
+/**
+ * The guard that survives a stale draft.
+ *
+ * Greying out the checkboxes is not enough on its own: a draft saved after last week's
+ * gameweek, or a league whose defaults switch standings on, arrives with blocks already
+ * selected. Without this, the message composed mid-gameweek would still carry a table of
+ * scores that change before the day is out.
+ */
+describe('effectiveBlocks', () => {
+  const all: BlockSelection = {
+    overallStandings: true,
+    gwResults: true,
+    prizeStructure: true,
+  }
+
+  it('honours the selection once the figures are real', () => {
+    expect(effectiveBlocks(all, true)).toEqual(all)
+  })
+
+  it('drops the gameweek-derived blocks while it is unsettled, whatever was selected', () => {
+    expect(effectiveBlocks(all, false)).toEqual({
+      overallStandings: false,
+      gwResults: false,
+      // Kept: the prize figures come from the league's settings, not from any match.
+      prizeStructure: true,
+    })
+  })
+
+  it('knows which blocks a live gameweek actually affects', () => {
+    expect(dependsOnGameweek('overallStandings')).toBe(true)
+    expect(dependsOnGameweek('gwResults')).toBe(true)
+    expect(dependsOnGameweek('prizeStructure')).toBe(false)
+  })
+
+  it('leaves an already-empty selection alone', () => {
+    expect(effectiveBlocks(NO_BLOCKS, false)).toEqual(NO_BLOCKS)
+    expect(effectiveBlocks(NO_BLOCKS, true)).toEqual(NO_BLOCKS)
   })
 })
