@@ -45,3 +45,30 @@ test('never shows both a confirmation and an error', async ({ page }) => {
   await expect(page.getByText(/no longer valid/)).toBeVisible()
   await expect(page.getByText(/Check your email/)).toHaveCount(0)
 })
+
+/**
+ * Submitting the form — the FAILED send only.
+ *
+ * Says so in the name because this cannot reach the success path and it would be easy to
+ * assume otherwise. The suite runs a production build with no `AUTH_RESEND_KEY`, so
+ * `sendVerificationRequest` throws every time and the action always takes its error
+ * branch. Verified rather than assumed: this test passes unchanged against the version
+ * before the fix.
+ *
+ * **The success path is therefore untested**, and it is the one that broke — an owner was
+ * parked on `/api/auth/verify-request` after a *successful* send. Covering it would mean
+ * mailing through Resend on every run, or adding a fetch seam to `src/auth.ts` of the kind
+ * `FPL_FIXTURES` gives the FPL client. Worth doing if this area is touched again; not
+ * worth destabilising auth for today.
+ */
+test('a failed send lands back on the sign-in page, not on an API route', async ({ page }) => {
+  await page.goto('/signin')
+
+  await page.getByRole('textbox').fill('owner@example.test')
+  await page.getByRole('button', { name: 'Email me a link' }).click()
+
+  await page.waitForURL(/\/signin/)
+  expect(page.url()).not.toContain('/api/auth/')
+  // Whatever the outcome, the page renders and says something about it.
+  await expect(page.getByRole('button', { name: 'Email me a link' })).toBeVisible()
+})
