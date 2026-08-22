@@ -35,9 +35,24 @@ const SIGNIN_ERRORS: Record<string, { title: string; detail: string }> = {
       'Sign-in is allowlist-based and there is no self-signup. Ask an existing owner to ' +
       'add you.',
   },
+  /**
+   * Names the likely cause rather than only the rule.
+   *
+   * "Links work once and expire" is true and sends the reader hunting for the wrong
+   * explanation — they assume they were slow. In practice the common cause is a link
+   * forwarded through a chat app, whose preview fetcher opens the URL to build a card and
+   * spends the single-use token seconds before the person taps it. That happened three
+   * times in production on 2026-08-17 before the HTTP logs named WhatsApp.
+   *
+   * This page is read *after* it has gone wrong, so it is the one place where saying so
+   * converts a dead end into an instruction.
+   */
   Verification: {
     title: 'That link is no longer valid',
-    detail: 'Sign-in links expire shortly and work once. Request a fresh one below.',
+    detail:
+      'Sign-in links work once and expire quickly. If you forwarded it through WhatsApp ' +
+      'or iMessage, the preview spent it - request a fresh one below and open it on this ' +
+      'device.',
   },
 }
 
