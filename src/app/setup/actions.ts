@@ -38,7 +38,6 @@ export async function saveSettingsAction(input: {
   settings: LeagueSettings
   gameweekCount: number
   managerCount: number
-  managerEntry: number | null
 }): Promise<SaveSettingsResult> {
   const session = await auth()
   if (!session?.user?.id) return { ok: false, errors: ['Not signed in'] }
@@ -59,11 +58,39 @@ export async function saveSettingsAction(input: {
   }
 
   await saveSettings(input.leagueId, input.settings)
-  await setManagerEntry(input.leagueId, session.user.id, input.managerEntry)
 
   revalidatePath('/send')
   revalidatePath('/setup')
   return { ok: true, errors: [] }
+}
+
+/**
+ * Records which FPL entry the signed-in owner plays as.
+ *
+ * Its own action, saving on change, rather than a passenger on the settings form. It sits
+ * on a different axis from everything that form validates: the pot, the prizes and the
+ * expenses are the league's and shared between co-owners, while this is one owner's own
+ * and signs only the messages they send. It rode along with Save because both ended up in
+ * one component, which is also why it had to appear under the prize arithmetic it has
+ * nothing to do with.
+ *
+ * Nothing to validate here beyond ownership — an entry either is one of the league's
+ * managers or the owner does not play, and both are legitimate.
+ */
+export async function setManagerEntryAction(input: {
+  leagueId: string
+  managerEntry: number | null
+}) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('Not signed in')
+  await assertOwner(input.leagueId, session.user.id)
+
+  await setManagerEntry(input.leagueId, session.user.id, input.managerEntry)
+
+  // `/send` builds the signature from this row at render time, so it is the page that
+  // actually changes.
+  revalidatePath('/send')
+  revalidatePath('/setup')
 }
 
 export interface AddRecipientsResult {
@@ -219,8 +246,15 @@ export async function removeOwnerAction(input: {
 
 function describe(error: ReturnType<typeof validateSettings>[number]): string {
   switch (error.code) {
-    case 'fixed-exceeds-pot':
-      return `Fixed prizes total ${(error.committedCents / 100).toFixed(2)}, which is more than the pot of ${(error.potCents / 100).toFixed(2)}.`
+    case 'fixed-exceeds-pot': {
+      const total = error.committedCents + error.expensesCents
+      const what = error.expensesCents > 0 ? 'Fixed prizes and expenses total' : 'Fixed prizes total'
+      return `${what} ${(total / 100).toFixed(2)}, which is more than the pot of ${(error.potCents / 100).toFixed(2)}.`
+    }
+    case 'expense-missing-label':
+      return `Expense ${error.index + 1} has no name.`
+    case 'non-positive-expense':
+      return `The expense “${error.label}” is not a positive amount.`
     case 'percentages-not-100':
       return `Place percentages add up to ${error.sum}%, not 100%.`
     case 'no-paid-places':

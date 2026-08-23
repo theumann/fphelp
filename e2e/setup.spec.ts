@@ -44,12 +44,19 @@ test('an owner sees the whole roster, across both collections and both pages', a
   await expect(ownerPage.locator('header')).toContainText('38 gameweeks')
 
   // The joiner has no scores, so it is the one most likely to be dropped on the way in.
+  // The team picker is on the People panel now, so this also checks the roster reaches it.
+  await ownerPage.getByRole('tab', { name: 'People' }).click()
   await expect(ownerPage.getByRole('combobox')).toContainText('Late To The Party')
 })
 
 test.describe('the save bar', () => {
+  // Communication leads now, so the money panel is reached by name rather than by
+  // being what /setup happens to open on.
+  test.beforeEach(async ({ ownerPage }) => {
+    await ownerPage.goto('/setup?tab=money')
+  })
+
   test('reports clean, then dirty, then saves', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
 
     const save = ownerPage.getByRole('button', { name: 'Save settings' })
     await expect(ownerPage.getByText('All changes saved')).toBeVisible()
@@ -65,8 +72,6 @@ test.describe('the save bar', () => {
   })
 
   test('refuses to save while the percentages do not total 100', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
-
     // Defaults are 40/25/15/10/6/4; raising first place to 50 over-commits the remainder.
     await ownerPage.getByLabel('Percentage for place 1').fill('50')
     await expect(ownerPage.getByText(/add up to 110%, not 100%/)).toBeVisible()
@@ -74,14 +79,71 @@ test.describe('the save bar', () => {
   })
 })
 
+/**
+ * League expenses.
+ *
+ * The unit tests own the arithmetic; what only this level can show is that a cost
+ * survives a save and comes back, since it is stored in its own table and rewritten
+ * wholesale on every save — the failure mode is an expense that looks entered and
+ * silently isn't.
+ */
+test.describe('league expenses', () => {
+  test.beforeEach(async ({ ownerPage }) => {
+    await ownerPage.goto('/setup?tab=money')
+  })
+
+  test('a cost is saved, comes back, and comes off the remainder', async ({ ownerPage }) => {
+    await ownerPage.getByLabel('Total pot').fill('1800')
+    await ownerPage.getByRole('button', { name: 'Add an expense' }).click()
+    await ownerPage.getByLabel('Expense 1 label').fill('Trophy engraving')
+    await ownerPage.getByLabel('Expense 1 amount').fill('100')
+
+    // $1,800 − (38 × $15 + $100) − $100 of engraving.
+    await expect(ownerPage.getByText('$1,030.00').first()).toBeVisible()
+
+    await ownerPage.getByRole('button', { name: 'Save settings' }).click()
+    await expect(ownerPage.getByText('Settings saved.')).toBeVisible()
+
+    await ownerPage.reload()
+    await expect(ownerPage.getByLabel('Expense 1 label')).toHaveValue('Trophy engraving')
+    await expect(ownerPage.getByLabel('Expense 1 amount')).toHaveValue('100')
+  })
+
+  test('an unnamed cost blocks the save, since the digest prints the label', async ({
+    ownerPage,
+  }) => {
+    await ownerPage.getByRole('button', { name: 'Add an expense' }).click()
+    await ownerPage.getByLabel('Expense 1 amount').fill('100')
+
+    await expect(ownerPage.getByText(/Expense 1 needs a name/)).toBeVisible()
+    await expect(ownerPage.getByRole('button', { name: 'Save settings' })).toBeDisabled()
+  })
+
+  /** The over-commitment: the fixed prizes fit, and the engraving is what tips it over. */
+  test('a cost that overdraws the pot is refused with the expenses named', async ({
+    ownerPage,
+  }) => {
+    await ownerPage.getByLabel('Total pot').fill('700')
+    await ownerPage.getByRole('button', { name: 'Add an expense' }).click()
+    await ownerPage.getByLabel('Expense 1 label').fill('Trophy engraving')
+    await ownerPage.getByLabel('Expense 1 amount').fill('100')
+
+    await expect(ownerPage.getByText('Fixed prizes and expenses cost more than the pot')).toBeVisible()
+    await expect(ownerPage.getByRole('button', { name: 'Save settings' })).toBeDisabled()
+  })
+})
+
 test.describe('owners', () => {
+  test.beforeEach(async ({ ownerPage }) => {
+    await ownerPage.goto('/setup')
+    await ownerPage.getByRole('tab', { name: 'People' }).click()
+  })
+
   test('adding an address grants access without sending anything', async ({
     ownerPage,
     db,
     league,
   }) => {
-    await ownerPage.goto('/setup')
-
     await ownerPage.getByLabel('Add an owner').fill('co-owner@example.test')
     await ownerPage.getByRole('button', { name: 'Add', exact: true }).click()
 
@@ -98,8 +160,6 @@ test.describe('owners', () => {
 
   test('adding the same address twice is a no-op, not an error', async ({ ownerPage, db, league }) => {
     await addOwnerRow(db, league.leagueId, 'co-owner@example.test')
-    await ownerPage.goto('/setup')
-
     await ownerPage.getByLabel('Add an owner').fill('co-owner@example.test')
     await ownerPage.getByRole('button', { name: 'Add', exact: true }).click()
 
@@ -109,7 +169,7 @@ test.describe('owners', () => {
 
   test('a co-owner can be removed', async ({ ownerPage, db, league }) => {
     await addOwnerRow(db, league.leagueId, 'co-owner@example.test')
-    await ownerPage.goto('/setup')
+    await ownerPage.reload()
 
     await ownerPage
       .getByRole('listitem')
@@ -122,8 +182,6 @@ test.describe('owners', () => {
   })
 
   test('the only owner cannot remove themselves', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
-
     const you = ownerPage.getByRole('listitem').filter({ hasText: 'owner@example.test' })
     await expect(you).toContainText('you')
     await expect(you.getByRole('button', { name: 'Remove' })).toHaveCount(0)
@@ -145,8 +203,12 @@ test.describe('owners', () => {
 })
 
 test.describe('email recipients', () => {
-  test('the list is hidden until email is turned on', async ({ ownerPage }) => {
+  test.beforeEach(async ({ ownerPage }) => {
     await ownerPage.goto('/setup')
+    await ownerPage.getByRole('tab', { name: 'Communication' }).click()
+  })
+
+  test('the list is hidden until email is turned on', async ({ ownerPage }) => {
 
     await expect(ownerPage.getByText(/sends by WhatsApp only/)).toBeVisible()
     await expect(ownerPage.getByLabel('Add addresses')).toBeHidden()
@@ -156,7 +218,6 @@ test.describe('email recipients', () => {
   })
 
   test('a pasted list reports what it could not read', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
     await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
 
     await ownerPage
@@ -174,7 +235,7 @@ test.describe('reply model', () => {
   test('hiding is on until the owner turns it off, and says what changes', async ({
     ownerPage,
   }) => {
-    await ownerPage.goto('/setup')
+    await ownerPage.goto('/setup?tab=messages')
     await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
 
     const hide = ownerPage.getByRole('checkbox', { name: /Hide recipients/ })
@@ -186,6 +247,8 @@ test.describe('reply model', () => {
     await hide.uncheck()
     await expect(ownerPage.getByText(/reaches all league members/)).toBeVisible()
 
+    // Reloaded without the parameter on purpose: `?tab=` survives the reload because the
+    // component writes it back, and the setting has to survive independently of that.
     await ownerPage.reload()
     await expect(ownerPage.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()
   })

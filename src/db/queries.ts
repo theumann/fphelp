@@ -16,6 +16,7 @@ import {
   deliveries,
   digests,
   dues,
+  leagueExpenses,
   leagues,
   leagueUsers,
   managerGwHistory,
@@ -287,10 +288,17 @@ export async function getSettings(leagueId: string): Promise<LeagueSettings> {
   const rows = await db.query.prizeRules.findMany({
     where: eq(prizeRules.leagueId, leagueId),
   })
+  // Ordered explicitly so the digest lists costs in the order the owner entered them,
+  // and Setup does not reshuffle its rows on every save.
+  const expenseRows = await db.query.leagueExpenses.findMany({
+    where: eq(leagueExpenses.leagueId, leagueId),
+    orderBy: leagueExpenses.position,
+  })
 
   return fromPrizeRules(
     rows.map((r) => ({ kind: r.kind, rank: r.rank, value: r.value })),
     {
+      expenses: expenseRows.map((e) => ({ label: e.label, amount: Number(e.amount) })),
       // Null stays undefined rather than collapsing to 0: "nobody has set this" and
       // "the pot is zero" are different claims, and only one of them is safe to print.
       potTotal: league?.potTotal != null ? Number(league.potTotal) : undefined,
@@ -306,6 +314,11 @@ export async function getSettings(leagueId: string): Promise<LeagueSettings> {
  * Prize rules are rewritten wholesale inside a transaction rather than diffed: the set
  * must stay coherent (contiguous ranks, percentages totalling 100), and a partial
  * update that left a stale row behind would silently misallocate the pot.
+ *
+ * Expenses go the same way and for the same reason — they are a term in that arithmetic,
+ * and a stale engraving row is a deduction nobody entered. The cost is that their `id`s
+ * and `created_at` are reissued on every save; nothing references either, and the entry
+ * order is preserved by re-inserting in array order.
  */
 export async function saveSettings(leagueId: string, settings: LeagueSettings) {
   await db.transaction(async (tx) => {
@@ -327,6 +340,18 @@ export async function saveSettings(leagueId: string, settings: LeagueSettings) {
         value: r.value,
       })),
     )
+
+    await tx.delete(leagueExpenses).where(eq(leagueExpenses.leagueId, leagueId))
+    if (settings.expenses.length > 0) {
+      await tx.insert(leagueExpenses).values(
+        settings.expenses.map((e, position) => ({
+          leagueId,
+          label: e.label.trim(),
+          amount: String(e.amount),
+          position,
+        })),
+      )
+    }
   })
 }
 

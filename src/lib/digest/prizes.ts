@@ -1,5 +1,12 @@
 import { splitEvenly, toCents, type Cents } from './money'
 
+/** A cost paid out of the pot before any prize, e.g. trophy engraving. */
+export interface Expense {
+  /** Member-facing: the digest prints this. */
+  label: string
+  amount: string | number
+}
+
 export interface PrizeConfig {
   /** `undefined` when the league has not set one. See `LeagueSettings.potTotal`. */
   potTotal: string | number | undefined
@@ -7,6 +14,8 @@ export interface PrizeConfig {
   gwWinnerAmount: string | number
   /** Fixed amount for the season's single highest gameweek score. */
   seasonBestGwAmount: string | number
+  /** League costs, deducted off the top alongside the fixed prizes. */
+  expenses: Expense[]
   /** Percentages by final rank, index 0 = 1st place. Length IS the number of paid places. */
   rankPercentages: number[]
   /** From events.length — never hardcode 38, a shortened season would over-commit. */
@@ -26,15 +35,24 @@ export interface PotBreakdown {
   potCents: Cents
   /** Fixed commitments, which come off the top. */
   committedFixedCents: Cents
+  /** League costs, which come off the top too. Zero when there are none. */
+  expensesCents: Cents
   /** What the rank percentages actually apply to. */
   remainderCents: Cents
 }
 
+/** Total of a league's expenses. Kept separate so callers can show the deduction. */
+export function expensesTotal(expenses: Expense[]): Cents {
+  return expenses.reduce((sum, e) => sum + toCents(e.amount), 0)
+}
+
 /**
- * Fixed prizes come off the top; percentages apply to what's left.
+ * Fixed prizes and league expenses come off the top; percentages apply to what's left.
  *
  * Applying the percentages to the whole pot instead over-commits it, and the shortfall
- * only surfaces at season end when the treasurer pays out.
+ * only surfaces at season end when the treasurer pays out. Expenses are the same trap
+ * one step further along: $100 of engraving left out of this subtraction is $100 of
+ * prizes the league has promised and cannot pay.
  */
 export function computePot(config: PrizeConfig): PotBreakdown {
   // Narrowed by the condition rather than asserted, so a future change to the type is
@@ -44,19 +62,23 @@ export function computePot(config: PrizeConfig): PotBreakdown {
     config.potTotal !== undefined && config.potTotal !== '' ? toCents(config.potTotal) : 0
   const committedFixedCents =
     toCents(config.gwWinnerAmount) * config.gameweekCount + toCents(config.seasonBestGwAmount)
+  const expensesCents = expensesTotal(config.expenses)
 
   return {
     potSet,
     potCents,
     committedFixedCents,
+    expensesCents,
     // Negative when unset, which is why `potSet` exists: a remainder of minus the fixed
     // commitments is arithmetically true and meaningless to show.
-    remainderCents: potCents - committedFixedCents,
+    remainderCents: potCents - committedFixedCents - expensesCents,
   }
 }
 
 export type ValidationError =
-  | { code: 'fixed-exceeds-pot'; committedCents: Cents; potCents: Cents }
+  | { code: 'fixed-exceeds-pot'; committedCents: Cents; expensesCents: Cents; potCents: Cents }
+  | { code: 'expense-missing-label'; index: number }
+  | { code: 'non-positive-expense'; label: string }
   | { code: 'percentages-not-100'; sum: number }
   | { code: 'no-paid-places' }
   | { code: 'non-positive-percentage'; rank: number }
@@ -68,7 +90,7 @@ export type ValidationError =
  */
 export function validatePrizeConfig(config: PrizeConfig, managerCount?: number): ValidationError[] {
   const errors: ValidationError[] = []
-  const { potSet, potCents, committedFixedCents } = computePot(config)
+  const { potSet, potCents, committedFixedCents, expensesCents } = computePot(config)
 
   /**
    * Only meaningful once there is a pot to exceed.
@@ -77,9 +99,23 @@ export function validatePrizeConfig(config: PrizeConfig, managerCount?: number):
    * "fixed prizes cost more than the pot holds" and a disabled Save button — an error
    * about a decision they have not made, blocking them from making it.
    */
-  if (potSet && committedFixedCents > potCents) {
-    errors.push({ code: 'fixed-exceeds-pot', committedCents: committedFixedCents, potCents })
+  if (potSet && committedFixedCents + expensesCents > potCents) {
+    errors.push({
+      code: 'fixed-exceeds-pot',
+      committedCents: committedFixedCents,
+      expensesCents,
+      potCents,
+    })
   }
+
+  config.expenses.forEach((expense, i) => {
+    // The label is printed to the league, so an unlabelled deduction is money the digest
+    // subtracts without saying what for.
+    if (expense.label.trim() === '') errors.push({ code: 'expense-missing-label', index: i })
+    if (toCents(expense.amount) <= 0) {
+      errors.push({ code: 'non-positive-expense', label: expense.label.trim() })
+    }
+  })
 
   const places = config.rankPercentages.length
   if (places === 0) errors.push({ code: 'no-paid-places' })

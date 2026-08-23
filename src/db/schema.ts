@@ -218,6 +218,38 @@ export const prizeRules = pgTable('prize_rules', {
   value: numeric('value', { precision: 12, scale: 4 }).notNull(),
 })
 
+/**
+ * Costs paid out of the pot before any prize — trophy engraving is the reference
+ * league's case.
+ *
+ * Itemised rather than one `expenses_total` column on `leagues`, mirroring how
+ * `prize_rules` already works: a treasurer wants to name what the money went on, and a
+ * bare subtraction leaves the league unable to account for it. The label is what the
+ * digest prints, so it is member-facing text, not an internal note.
+ *
+ * Arithmetically these are one more deduction off the top, alongside the fixed prizes:
+ * `remainder = pot − fixed prizes − expenses`. They must therefore join the
+ * commitments-exceed-pot validation, or a league over-commits invisibly until May.
+ */
+export const leagueExpenses = pgTable('league_expenses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  leagueId: uuid('league_id')
+    .notNull()
+    .references(() => leagues.id, { onDelete: 'cascade' }),
+  /** Member-facing: this is the wording that appears in the digest's prize block. */
+  label: text('label').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  /**
+   * The owner's entry order, so the digest lists costs the way Setup shows them.
+   *
+   * Explicit rather than ordering by `created_at`: the whole set is rewritten in one
+   * insert on every save, which stamps every row the same instant and leaves the order
+   * up to the planner.
+   */
+  position: integer('position').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const dues = pgTable(
   'dues',
   {

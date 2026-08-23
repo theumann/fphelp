@@ -38,7 +38,9 @@ test('the league default decides what a new draft starts with', async ({ ownerPa
   await expect(ownerPage.getByRole('checkbox', STANDINGS)).toBeChecked()
   await expect(ownerPage.getByRole('checkbox', PRIZES)).not.toBeChecked()
 
-  await ownerPage.goto('/setup')
+  // The block defaults live on Setup's Communication panel, so the tab is part of
+  // reaching them — and `?tab=` survives the reload this test does below.
+  await ownerPage.goto('/setup?tab=messages')
   const defaults = ownerPage.getByRole('list').filter({ hasText: 'Gameweek results' })
   await defaults.getByRole('checkbox', STANDINGS).uncheck()
   await defaults.getByRole('checkbox', PRIZES).check()
@@ -49,7 +51,7 @@ test('the league default decides what a new draft starts with', async ({ ownerPa
   // A draft already exists for this gameweek by now, and its own selection wins — the
   // default only decides where a *new* one starts. So this asserts the stored default,
   // which is the part Setup owns.
-  await ownerPage.goto('/setup')
+  await ownerPage.goto('/setup?tab=messages')
   await expect(defaults.getByRole('checkbox', PRIZES)).toBeChecked()
 })
 
@@ -147,7 +149,9 @@ test.describe('reply model on the compose page', () => {
     await expect(page.getByText(/Everyone sees the list and can reply to all/)).toBeVisible()
 
     // One value, two views: the change has to be visible in Setup, not just here.
-    await page.goto('/setup')
+    // Deep-linked to the panel this setting lives on, which is also what the `?tab=`
+    // parameter is for.
+    await page.goto('/setup?tab=messages')
     await expect(page.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()
   })
 })

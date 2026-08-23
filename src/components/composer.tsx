@@ -24,6 +24,8 @@ import { composeMessage } from '@/lib/render/compose'
 import { renderEmail } from '@/lib/render/email'
 import { buildWhatsAppLinks } from '@/lib/render/whatsapp'
 
+import { TabStrip } from './ui'
+
 interface Props {
   /**
    * Whether the gameweek's figures have settled. False mid-gameweek and while bonus
@@ -350,42 +352,28 @@ export function Composer({
       </label>
 
       {emailEnabled && (
-        <div
-          role="tablist"
-          aria-label="Delivery channel"
-          className="flex gap-1 rounded-lg bg-surface-muted p-1"
-        >
-          {(
-            [
-              { id: 'email', label: 'Email' },
-              { id: 'whatsapp', label: 'WhatsApp' },
-            ] as const
-          ).map(({ id, label }) => (
-            <button
-              key={id}
-              role="tab"
-              id={`tab-${id}`}
-              aria-selected={channel === id}
-              aria-controls={`panel-${id}`}
-              onClick={() => setChannel(id)}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                channel === id
-                  ? 'bg-surface text-foreground shadow-sm'
-                  : 'text-muted hover:text-foreground'
-              }`}
-            >
-              {label}
-              {/* The budget applies only to WhatsApp and its meter lives on that tab, so an
-                  over-long message would otherwise be invisible from the email tab — which
-                  is now where the owner starts. */}
-              {id === 'whatsapp' && overBudget && (
+        // The same strip Setup uses. These are the app's only two tabbed surfaces, and
+        // they had drifted into two different visual languages for one idea.
+        <TabStrip
+          label="Delivery channel"
+          active={channel}
+          onSelect={(id) => setChannel(id as Channel)}
+          tabs={[
+            { id: 'email', label: 'Email' },
+            {
+              id: 'whatsapp',
+              label: 'WhatsApp',
+              /* The budget applies only to WhatsApp and its meter lives on that tab, so an
+                 over-long message would otherwise be invisible from the email tab — which
+                 is now where the owner starts. */
+              badge: overBudget ? (
                 <span className="ml-1.5 text-danger" title="Over the length budget">
                   ●<span className="sr-only">over the length budget</span>
                 </span>
-              )}
-            </button>
-          ))}
-        </div>
+              ) : undefined,
+            },
+          ]}
+        />
       )}
 
       {channel === 'whatsapp' ? (

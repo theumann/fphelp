@@ -74,6 +74,86 @@ export function Card({ title, hint, aside, children, className = '' }: CardProps
   )
 }
 
+export interface TabDescriptor {
+  /** Also the `tab-`/`panel-` id suffix, so `aria-controls` finds the panel. */
+  id: string
+  label: string
+  /** Rendered after the label — a count, or a warning dot. */
+  badge?: ReactNode
+}
+
+/**
+ * The tab strip, shared by Setup's three panels and the composer's two channels.
+ *
+ * Underlined rather than a filled segmented control. The filled version reads as a row of
+ * buttons, and the tint it needs — `surface-muted` — sits close enough to the page
+ * background that the unselected labels look like prose. The rule under the strip is what
+ * says "these are tabs" at a glance, and the selected one breaks it with `accent`, the
+ * strongest colour in the palette, so the open panel is unambiguous in both themes.
+ *
+ * Presentational only: it owns no state. Which tab is open, and what happens when one is
+ * picked, belong to the caller — Setup keeps it in the URL, the composer does not.
+ */
+export function TabStrip({
+  tabs,
+  active,
+  onSelect,
+  label,
+}: {
+  tabs: readonly TabDescriptor[]
+  active: string
+  onSelect: (id: string) => void
+  /** Names the strip for screen readers: "Setup sections", "Delivery channel". */
+  label: string
+}) {
+  return (
+    /*
+      The rule and the tabs share one grid cell, rule painted first.
+
+      The obvious construction — `border-b` on the strip and `-mb-px` on each tab to pull
+      its underline over that border — overflows the strip by exactly one pixel. Harmless
+      on its own, except `overflow-x-auto` forces the *other* axis to `auto` too, so that
+      one pixel earns a full vertical scrollbar on Windows.
+
+      Stacking instead means no negative margins and nothing to overflow: an unselected
+      tab's transparent border lets the rule show through, and the selected tab's accent
+      border paints over it.
+    */
+    <div className="grid">
+      <div aria-hidden className="col-start-1 row-start-1 self-end h-px bg-line" />
+      {/* Scrolls rather than wraps: a fourth tab should not silently become two rows. */}
+      <div
+        role="tablist"
+        aria-label={label}
+        className="col-start-1 row-start-1 flex gap-1 overflow-x-auto"
+      >
+        {tabs.map((tab) => {
+          const selected = tab.id === active
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls={`panel-${tab.id}`}
+              onClick={() => onSelect(tab.id)}
+              className={`shrink-0 cursor-pointer border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+                selected
+                  ? 'border-accent text-foreground'
+                  : 'border-transparent text-muted hover:border-line-strong hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+              {tab.badge}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /** Input styling as a constant, for the cases that need a bare `<input>` or a `<select>`. */
 export const inputClass =
   'w-full rounded-lg border border-line-strong bg-surface px-3 py-2.5 text-base text-foreground placeholder:text-faint focus-visible:outline-ring disabled:opacity-50'

@@ -6,7 +6,9 @@ import { NotAnOwner } from '@/components/not-an-owner'
 import { OwnersList } from '@/components/owners-list'
 import { RecipientsList } from '@/components/recipients-list'
 import { SetupForm } from '@/components/setup-form'
+import { SetupTabs } from '@/components/setup-tabs'
 import { Page, PageHeader } from '@/components/ui'
+import { YourTeam } from '@/components/your-team'
 import {
   ensureLeague,
   findMembership,
@@ -22,7 +24,13 @@ import { REFERENCE_LEAGUE } from '@/lib/league-config'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
+
   const session = await auth()
   if (!session?.user?.id) redirect('/signin')
 
@@ -56,29 +64,69 @@ export default async function SetupPage() {
           }
         />
 
-        <SetupForm
-          leagueId={league.id}
-          initial={settings}
-          gameweekCount={gameweekCount(bootstrap)}
-          managers={roster.map((m) => ({
-            entry: m.entry,
-            entryName: m.entryName,
-            playerName: m.playerName,
-          }))}
-          initialManagerEntry={membership.managerEntry}
-          finalised={finalised}
-        />
-
-        <DefaultBlocks leagueId={league.id} initial={league.defaultBlocks} />
-
-        <OwnersList leagueId={league.id} owners={owners} currentUserId={session.user.id} />
-
-        <RecipientsList
-          leagueId={league.id}
-          initialRecipients={recipientList}
-          initialEmailEnabled={league.emailEnabled}
-          initialHideRecipients={league.hideRecipients}
-          managerCount={roster.length}
+        {/*
+          Three panels, split by how the settings save rather than by what they are
+          about: money batches behind a Save button, messages and people write on click.
+          Communication leads because it is the weekly one — the pot and the prize rules
+          are set once and then rarely touched.
+          "Your team" sits with people because it is the one setting here that belongs to
+          the signed-in owner rather than to the league — co-owners each set their own.
+        */}
+        <SetupTabs
+          initial={tab}
+          tabs={[
+            {
+              id: 'messages',
+              label: 'Communication',
+              panel: (
+                <>
+                  <DefaultBlocks leagueId={league.id} initial={league.defaultBlocks} />
+                  <RecipientsList
+                    leagueId={league.id}
+                    initialRecipients={recipientList}
+                    initialEmailEnabled={league.emailEnabled}
+                    initialHideRecipients={league.hideRecipients}
+                    managerCount={roster.length}
+                  />
+                </>
+              ),
+            },
+            {
+              id: 'money',
+              label: 'Pot & prizes',
+              panel: (
+                <SetupForm
+                  leagueId={league.id}
+                  initial={settings}
+                  gameweekCount={gameweekCount(bootstrap)}
+                  managerCount={roster.length}
+                  finalised={finalised}
+                />
+              ),
+            },
+            {
+              id: 'people',
+              label: 'People',
+              panel: (
+                <>
+                  <OwnersList
+                    leagueId={league.id}
+                    owners={owners}
+                    currentUserId={session.user.id}
+                  />
+                  <YourTeam
+                    leagueId={league.id}
+                    managers={roster.map((m) => ({
+                      entry: m.entry,
+                      entryName: m.entryName,
+                      playerName: m.playerName,
+                    }))}
+                    initial={membership.managerEntry}
+                  />
+                </>
+              ),
+            },
+          ]}
         />
       </Page>
     </main>

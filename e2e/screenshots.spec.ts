@@ -18,6 +18,8 @@ import { test } from './support/test'
  */
 const SHOTS = 'screenshots'
 
+const SETUP_TABS = ['money', 'messages', 'people'] as const
+
 test.describe('light', () => {
   test.use({ colorScheme: 'light' })
 
@@ -31,10 +33,14 @@ test.describe('light', () => {
     await page.screenshot({ path: `${SHOTS}/signin-light.png`, fullPage: true })
   })
 
-  test('setup', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
-    await ownerPage.screenshot({ path: `${SHOTS}/setup-light.png`, fullPage: true })
-  })
+  // One shot per tab: a single screenshot of /setup now shows only the panel that
+  // happens to be open, which is the one thing this suite exists to notice.
+  for (const tab of SETUP_TABS) {
+    test(`setup ${tab}`, async ({ ownerPage }) => {
+      await ownerPage.goto(`/setup?tab=${tab}`)
+      await ownerPage.screenshot({ path: `${SHOTS}/setup-${tab}-light.png`, fullPage: true })
+    })
+  }
 })
 
 test.describe('dark', () => {
@@ -50,10 +56,14 @@ test.describe('dark', () => {
     await page.screenshot({ path: `${SHOTS}/signin-dark.png`, fullPage: true })
   })
 
-  test('setup', async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
-    await ownerPage.screenshot({ path: `${SHOTS}/setup-dark.png`, fullPage: true })
-  })
+  // One shot per tab: a single screenshot of /setup now shows only the panel that
+  // happens to be open, which is the one thing this suite exists to notice.
+  for (const tab of SETUP_TABS) {
+    test(`setup ${tab}`, async ({ ownerPage }) => {
+      await ownerPage.goto(`/setup?tab=${tab}`)
+      await ownerPage.screenshot({ path: `${SHOTS}/setup-${tab}-dark.png`, fullPage: true })
+    })
+  }
 })
 
 /**
