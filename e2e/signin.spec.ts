@@ -33,6 +33,14 @@ test('shows a spent link as an error, not as a confirmation', async ({ page }) =
 
   await expect(page.getByText(/no longer valid/)).toBeVisible()
   await expect(page.getByText(/Check your email/)).toHaveCount(0)
+
+  /**
+   * The actionable half, asserted separately because it is the half that gets trimmed.
+   * The title alone tells someone their link is dead; this tells them why it probably
+   * died and what to do differently, which is the only reason the page is worth reading.
+   */
+  await expect(page.getByText(/forwarded it through WhatsApp/)).toBeVisible()
+  await expect(page.getByText(/open it on this device/)).toBeVisible()
 })
 
 /**
