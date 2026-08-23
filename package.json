@@ -18,7 +18,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:bootstrap": "node --import tsx scripts/bootstrap-owner.mts",
     "db:clear-digest": "node --env-file-if-exists=.env --import tsx scripts/clear-test-digest.mts",
-    "job:capture": "node --import tsx scripts/capture-history.mts"
+    "job:capture": "node --import tsx scripts/capture-history.mts",
+    "fpl:snapshot": "node --import tsx scripts/fpl-snapshot.mts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",

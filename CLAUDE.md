@@ -29,6 +29,7 @@ Brand colours live in the logo, not in the tokens: the gradient runs cyan `#0399
 - `npm run e2e` — Playwright. Builds the app into `.next-e2e` and serves it, so it does not disturb a `next dev` you have running
 - `npm run e2e:screens` — screenshots of every page in both themes into `test-results/screens/`. Asserts nothing; it is for looking at
 - `npm run build:logo` — regenerates the logo variants and icons from `assets/logo_original.png`. Manual; the outputs are committed
+- `npm run fpl:snapshot` — prints what the live FPL API says right now, through the app's own client: the send gate's verdict, both standings collections, and the computed league average against FPL's global one. Read-only, no database. This is how [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §2/§3/§5 get checked, and the moments worth checking do not repeat
 
 Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects"), with two services from this repo plus Postgres:
 
