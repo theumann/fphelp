@@ -1,6 +1,13 @@
-import { formatCents, type Cents } from '../digest/money'
+import { formatCents } from '../digest/money'
 import type { DigestStats, StandingRow } from '../digest/stats'
-import type { BlockSelection, PrizeSummary } from './blocks'
+import {
+  alignRows,
+  ordinal,
+  placeLines,
+  prizeRows,
+  type BlockSelection,
+  type PrizeSummary,
+} from './blocks'
 
 /**
  * The HTML email, and its plaintext alternative.
@@ -157,21 +164,49 @@ function renderGwResultsHtml(stats: DigestStats): string {
   return heading(`Gameweek ${stats.gameweek}`) + paragraph(lines.join('<br>'))
 }
 
+/**
+ * The prize block: labels left, amounts right.
+ *
+ * A `<table>` rather than the monospace column WhatsApp needs — email has real layout, so
+ * the figures can align in the body font instead of a smaller fixed-width one. Same rows
+ * either way, from `prizeRows`.
+ */
 function renderPrizeHtml(prize: PrizeSummary): string {
-  const money = (c: Cents) => esc(formatCents(c, prize.currency))
-  // Mirrors `renderPrizeStructure`: no pot means no pot line and no per-place shares.
-  const lines: string[] = []
-  if (prize.potSet) lines.push(`Pot: <strong>${money(prize.potCents)}</strong>`)
-  lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
-  lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
+  const cell = `padding:4px 0;font:400 15px/1.5 ${FONT};color:${C.text}`
+  const amountCell = `${cell};text-align:right;white-space:nowrap`
 
-  if (prize.potSet && prize.rankPrizeCents.length > 0) {
-    lines.push(
-      `Final table: ${prize.rankPrizeCents.map((c, i) => `${i + 1}. ${money(c)}`).join(' · ')}`,
+  const rows = prizeRows(prize).map((row) => {
+    // The pot is the figure everything else is measured against, so it carries the weight.
+    const strong = row.label === 'Pot'
+    const amount = esc(formatCents(row.cents, prize.currency))
+    return (
+      `<tr>` +
+      `<td style="${cell}">${esc(row.label)}</td>` +
+      `<td style="${amountCell}${row.cents < 0 ? `;color:${C.muted}` : ''}">` +
+      `${strong ? `<strong>${amount}</strong>` : amount}</td>` +
+      `</tr>`
     )
+  })
+
+  // Each place's share is a slice of the remainder, so it is unknowable without a pot.
+  if (prize.potSet && prize.rankPrizeCents.length > 0) {
+    rows.push(
+      `<tr><td colspan="2" style="${cell};padding-top:12px;color:${C.muted};font-size:13px">Final table</td></tr>`,
+    )
+    for (const [i, cents] of prize.rankPrizeCents.entries()) {
+      rows.push(
+        `<tr>` +
+          `<td style="${cell}">${ordinal(i + 1)}</td>` +
+          `<td style="${amountCell}">${esc(formatCents(cents, prize.currency))}</td>` +
+          `</tr>`,
+      )
+    }
   }
 
-  return heading('Prizes') + paragraph(lines.join('<br>'))
+  return (
+    heading('Prizes') +
+    `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:0 0 12px">${rows.join('')}</table>`
+  )
 }
 
 /** The plaintext alternative. Mirrors the HTML, without WhatsApp's `*bold*` markers. */
@@ -212,14 +247,17 @@ function renderText(input: RenderEmailInput): string {
 
   if (input.blocks.prizeStructure && input.prize) {
     const prize = input.prize
-    const money = (c: Cents) => formatCents(c, prize.currency)
     // The third renderer of this block, alongside `renderPrizeHtml` here and WhatsApp's
     // `renderPrizeStructure`. All three have to agree to omit a pot nobody has set — this
-    // one was missed until a test asked for the plaintext body as well as the HTML.
-    const lines = ['Prizes']
-    if (prize.potSet) lines.push(`Pot: ${money(prize.potCents)}`)
-    lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
-    lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
+    // one was missed until a test asked for the plaintext body as well as the HTML. They
+    // share `prizeRows` now, so the omission is decided once.
+    const lines = ['Prizes', ...alignRows(prizeRows(prize), prize.currency)]
+    // Padded rather than proportional, like WhatsApp's block and for the same reason:
+    // plaintext mail has no layout, so columns are the only alignment available. No ```
+    // fences, which are WhatsApp's markup and would read as literal backticks here.
+    if (prize.potSet && prize.rankPrizeCents.length > 0) {
+      lines.push('', ...placeLines(prize))
+    }
     parts.push(lines.join('\n'))
   }
 

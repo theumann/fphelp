@@ -17,6 +17,7 @@ const settings: LeagueSettings = {
   gwWinnerAmount: 15,
   seasonBestGwAmount: 100,
   rankPercentages: [40, 25, 15, 10, 6, 4],
+  expenses: [],
 }
 
 describe('toPrizeRules / fromPrizeRules', () => {
@@ -128,5 +129,25 @@ describe('summarise', () => {
     const summary = summarise({ ...settings, rankPercentages: [33.34, 33.33, 33.33] }, 38)
     const total = summary.rankPrizeCents.reduce((a, b) => a + b, 0)
     expect(total).toBe(180_000 - 67_000)
+  })
+
+  it('shrinks the payout table by the league expenses', () => {
+    const summary = summarise(
+      { ...settings, expenses: [{ label: 'Trophy engraving', amount: 100 }] },
+      38,
+    )
+    const total = summary.rankPrizeCents.reduce((a, b) => a + b, 0)
+
+    // $1,130 remainder less $100 of engraving — the whole point of the feature.
+    expect(total).toBe(103_000)
+    expect(summary.potCents).toBe(180_000)
+  })
+
+  it('carries the costs itemised, since the digest names each one', () => {
+    const summary = summarise(
+      { ...settings, expenses: [{ label: 'Trophy engraving', amount: 100 }] },
+      38,
+    )
+    expect(summary.expenses).toEqual([{ label: 'Trophy engraving', amountCents: 10_000 }])
   })
 })

@@ -1,4 +1,5 @@
 import type { PrizeConfig } from './digest/prizes'
+import { toCents } from './digest/money'
 import { computePot, rankPrizePool, validatePrizeConfig } from './digest/prizes'
 import type { PrizeSummary } from './render/blocks'
 
@@ -9,7 +10,15 @@ export const DEFAULT_SETTINGS = {
   seasonBestGwAmount: 100,
   /** Six paid places. The count IS the number of places — no separate field. */
   rankPercentages: [40, 25, 15, 10, 6, 4],
+  /** No league starts with costs; the reference league's engraving is entered by hand. */
+  expenses: [] as LeagueExpense[],
 } as const
+
+/** A league_expenses row. The label is member-facing — the digest prints it. */
+export interface LeagueExpense {
+  label: string
+  amount: number
+}
 
 /** A prize_rules row, in the shape the database stores. */
 export interface PrizeRuleRow {
@@ -34,6 +43,15 @@ export interface LeagueSettings {
   seasonBestGwAmount: number
   /** Index 0 = 1st place. Length is the number of paid places. */
   rankPercentages: number[]
+  /**
+   * Costs paid out of the pot before any prize.
+   *
+   * Part of the settings rather than a list that saves on each click, because they are
+   * one of the terms in the pot arithmetic: adding an expense can push a league past
+   * `fixed-exceeds-pot`, and that has to be validated with the pot and the fixed prizes
+   * as one set, behind one Save.
+   */
+  expenses: LeagueExpense[]
 }
 
 /** Flattens settings into prize_rules rows. */
@@ -58,7 +76,13 @@ export function toPrizeRules(settings: LeagueSettings): PrizeRuleRow[] {
  */
 export function fromPrizeRules(
   rows: PrizeRuleRow[],
-  base: { potTotal: number | undefined; currency: string; entryFee?: number },
+  base: {
+    potTotal: number | undefined
+    currency: string
+    entryFee?: number
+    /** From `league_expenses`, which is its own table rather than a prize rule kind. */
+    expenses?: LeagueExpense[]
+  },
 ): LeagueSettings {
   const gwWinner = rows.find((r) => r.kind === 'gw_winner_fixed')
   const bestGw = rows.find((r) => r.kind === 'season_best_gw_fixed')
@@ -70,6 +94,7 @@ export function fromPrizeRules(
 
   return {
     ...base,
+    expenses: base.expenses ?? [],
     gwWinnerAmount: Number(gwWinner?.value ?? DEFAULT_SETTINGS.gwWinnerAmount),
     seasonBestGwAmount: Number(bestGw?.value ?? DEFAULT_SETTINGS.seasonBestGwAmount),
     rankPercentages:
@@ -122,6 +147,7 @@ export function toPrizeConfig(settings: LeagueSettings, gameweekCount: number): 
     gwWinnerAmount: settings.gwWinnerAmount,
     seasonBestGwAmount: settings.seasonBestGwAmount,
     rankPercentages: settings.rankPercentages,
+    expenses: settings.expenses,
     gameweekCount,
   }
 }
@@ -145,6 +171,9 @@ export function summarise(settings: LeagueSettings, gameweekCount: number): Priz
     potCents: pot.potCents,
     gwWinnerCents: Math.round(settings.gwWinnerAmount * 100),
     seasonBestGwCents: Math.round(settings.seasonBestGwAmount * 100),
+    // Carried itemised, not as a total: the digest names each cost, which is the whole
+    // reason expenses are a list rather than one number.
+    expenses: settings.expenses.map((e) => ({ label: e.label, amountCents: toCents(e.amount) })),
     rankPrizeCents: rankPrizePool(pot.remainderCents, settings.rankPercentages),
   }
 }

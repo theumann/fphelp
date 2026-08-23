@@ -16,6 +16,7 @@ const reference: PrizeConfig = {
   gwWinnerAmount: 15,
   seasonBestGwAmount: 100,
   rankPercentages: [40, 25, 15, 10, 6, 4],
+  expenses: [],
   gameweekCount: 38,
 }
 
@@ -68,6 +69,76 @@ describe('validatePrizeConfig', () => {
   it('rejects more paid places than managers', () => {
     const errors = validatePrizeConfig(reference, 4)
     expect(errors.map((e) => e.code)).toContain('more-places-than-managers')
+  })
+})
+
+/**
+ * Expenses are a deduction off the top, like the fixed prizes.
+ *
+ * The failure they introduce is the one this file already exists to prevent, one term
+ * further along: leave them out of the remainder and the top six are promised money that
+ * has already been spent on trophies, which nobody discovers until the payout in May.
+ */
+describe('league expenses', () => {
+  const engraving = { ...reference, expenses: [{ label: 'Trophy engraving', amount: 100 }] }
+
+  it('comes off the pot before the percentages apply', () => {
+    const pot = computePot(engraving)
+    expect(pot.expensesCents).toBe(10_000)
+    expect(pot.committedFixedCents).toBe(67_000)
+    expect(pot.remainderCents).toBe(103_000) // $1,130 − $100
+  })
+
+  it('totals several costs rather than taking only the first', () => {
+    const pot = computePot({
+      ...reference,
+      expenses: [
+        { label: 'Trophy engraving', amount: 100 },
+        { label: 'Trophy', amount: 45.5 },
+      ],
+    })
+    expect(pot.expensesCents).toBe(14_550)
+    expect(pot.remainderCents).toBe(180_000 - 67_000 - 14_550)
+  })
+
+  it('leaves the remainder untouched when a league has none', () => {
+    expect(computePot(reference).expensesCents).toBe(0)
+    expect(computePot(reference).remainderCents).toBe(113_000)
+  })
+
+  /** The over-commitment this validation exists for: fixed prizes alone would fit. */
+  it('counts against the pot, so expenses can be what tips a league over', () => {
+    const config = { ...reference, potTotal: 700, expenses: [{ label: 'Trophy', amount: 100 }] }
+    expect(computePot(config).committedFixedCents).toBeLessThan(70_000)
+
+    const errors = validatePrizeConfig(config)
+    expect(errors.map((e) => e.code)).toContain('fixed-exceeds-pot')
+  })
+
+  it('reports the expenses separately so the message can name them', () => {
+    const error = validatePrizeConfig({ ...engraving, potTotal: 600 }).find(
+      (e) => e.code === 'fixed-exceeds-pot',
+    )
+    expect(error).toMatchObject({ committedCents: 67_000, expensesCents: 10_000 })
+  })
+
+  it('rejects a cost with no name, since the digest prints the label', () => {
+    const errors = validatePrizeConfig({ ...reference, expenses: [{ label: '  ', amount: 100 }] })
+    expect(errors.map((e) => e.code)).toContain('expense-missing-label')
+  })
+
+  it('rejects a cost of nothing rather than storing an empty row', () => {
+    const errors = validatePrizeConfig({ ...reference, expenses: [{ label: 'Trophy', amount: 0 }] })
+    expect(errors.map((e) => e.code)).toContain('non-positive-expense')
+  })
+
+  /**
+   * Same reasoning as the fixed prizes: a league that has entered its costs before anyone
+   * counted the money must not be told they exceed a pot that does not exist yet.
+   */
+  it('does not exceed a pot nobody has set', () => {
+    const errors = validatePrizeConfig({ ...engraving, potTotal: undefined })
+    expect(errors.map((e) => e.code)).not.toContain('fixed-exceeds-pot')
   })
 })
 
@@ -234,6 +305,7 @@ describe('a pot nobody has set', () => {
     gwWinnerAmount: 15,
     seasonBestGwAmount: 100,
     rankPercentages: [40, 25, 15, 10, 6, 4],
+    expenses: [],
     gameweekCount: 38,
   }
 

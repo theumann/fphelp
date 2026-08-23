@@ -94,11 +94,11 @@ Each feature is annotated with its data source. "Free" means it needs no call be
   - fixed amount to the **season's single highest gameweek score**
   - **percentage to each of the top N** at season end, with **N and each percentage configurable by the owner** at setup. Defaults to 6 places at **40 / 25 / 15 / 10 / 6 / 4**. Validated as contiguous ranks from 1, percentages summing to 100%. Editable mid-season; locked once the ledger is finalised
 - **Fixed amounts come off the top, percentages apply to the remainder.** Setup must validate that fixed commitments don't exceed the pot, and that the percentages sum to 100% — see ARCHITECTURE.md. Getting this wrong over-commits the pot and only shows up in May. Re-validate on every pot edit, since managers keep joining
-- **League expenses** — costs paid out of the pot before any prize: trophy engraving is the reference league's case. Arithmetically this is one more deduction off the top, so `remainder = pot − fixed prizes − expenses`. Four things to decide before writing it:
-  - **One figure or an itemised list.** "Trophy engraving" is the kind of thing a treasurer wants to name, and a list lets the money be accounted for rather than merely subtracted. A `league_expenses` table (label, amount) mirrors how `prize_rules` already works; a single column is less to build and less use.
-  - **Validation must count them.** `validatePrizeConfig` compares fixed commitments against the pot; expenses have to join that sum or a league over-commits invisibly, which is the failure this file already warns only surfaces in May.
-  - **What the digest calls the money.** The prize block prints `Pot: £1,500`. With £100 of engraving, the prizes below it sum to £1,400 and somebody will do the arithmetic. Either show the expense line or stop printing the pot and print the prize pool — a product decision, not a technical one, and the reason this is worth deciding before coding.
-  - **An unset pot.** Expenses can be entered before anyone has set a pot, so they need the same "not set" handling `potSet` introduced rather than rendering against a zero.
+- ✅ **League expenses** — costs paid out of the pot before any prize: trophy engraving is the reference league's case. Arithmetically one more deduction off the top, so `remainder = pot − fixed prizes − expenses`. The four open questions, as decided:
+  - **Itemised, in a `league_expenses` table** (label, amount, position), mirroring `prize_rules`. A treasurer wants to name what the money went on, and a single column would subtract it without accounting for it. The label is member-facing, not an internal note — the digest prints it.
+  - **Validation counts them.** `validatePrizeConfig` compares `fixed + expenses` against the pot, and `fixed-exceeds-pot` carries `expensesCents` so the message can say which of the two tipped the league over. Expenses are therefore part of `LeagueSettings` and save behind Setup's one Save button, not per-click like the owners and recipients lists: they are a term in the arithmetic that has to be validated as one set.
+  - **The digest keeps the pot and shows the deduction** — `Pot  $1,800.00` then `Trophy engraving  -$100.00`, labels left and amounts right. The pot line states what the league collected; without the deduction beside it the prizes below no longer add up to the figure above, and eighteen people can do that subtraction. The amount is negative rather than prefixed with "Less", because the sign survives right-alignment where a prefix pushes the label along. Rejected: printing a bare prize pool, which reconciles but never says what was collected.
+  - **An unset pot suppresses the expense lines too**, exactly as it suppresses the pot and the per-place shares. A cost listed under nothing to deduct it from is a subtraction with no subject. Setup still accepts and stores the costs — they can be entered before anyone has counted the money.
 - **Winnings ledger** — who won what, accruing per gameweek. GW-winner amounts are final once a GW is scored; rank and best-GW prizes stay *provisional* until the final gameweek
 - **Tie handling** — pool the prizes for the tied positions and split evenly (see ARCHITECTURE.md). Detect ties on `rank`, never `rank_sort`
 - **Manual override of final positions** at season end — the escape hatch for leagues with their own tie-breaking rules, without modelling any of them
@@ -134,6 +134,24 @@ a favicon cropped to the "FP" monogram, since a 3:1 wordmark is unreadable at 32
 settings form batches behind a Save button while the lists write on every click, so the
 form now carries a sticky bar that says whether anything is unsaved rather than leaving
 the two models to be inferred.
+
+**Setup is now three tabs** — Pot & prizes, Communication, People — because five stacked
+sections had become a phone's worth of scrolling between the pot and the recipient list.
+The split follows **how the settings save**, not what they are about: the money panel is the
+only one with a Save button, and everything in the other two writes on click. One save model
+per panel is what stops the sticky bar from appearing to govern sections that ignore it.
+
+Two consequences worth knowing:
+
+- **"Your team" moved to People and now saves on change.** It was under the prize
+  arithmetic only because `setManagerEntry` happened to be called inside
+  `saveSettingsAction`. It is the one setting on the page belonging to the signed-in owner
+  rather than to the league — co-owners each pick their own team and sign differently — so
+  it sits with owners, and `setManagerEntryAction` is its own action.
+- **Panels stay mounted, hidden rather than unmounted**, and `?tab=` is synced with
+  `replaceState`. A server-rendered tab link would unmount the money form and silently
+  discard a half-typed pot on a tab switch. Deep links (`/setup?tab=messages`) still work,
+  which is how the e2e suite reaches the panels it tests.
 
 One item is already assigned to this pass rather than left to Phase 5:
 

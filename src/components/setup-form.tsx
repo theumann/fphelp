@@ -19,8 +19,8 @@ interface Props {
   leagueId: string
   initial: LeagueSettings
   gameweekCount: number
-  managers: { entry: number; entryName: string; playerName: string }[]
-  initialManagerEntry: number | null
+  /** Only the count is used, for the "more places than managers" check. */
+  managerCount: number
   finalised: boolean
 }
 
@@ -39,6 +39,7 @@ interface Draft {
   gwWinnerAmount: string
   seasonBestGwAmount: string
   rankPercentages: string[]
+  expenses: { label: string; amount: string }[]
 }
 
 const num = (s: string) => (s.trim() === '' ? 0 : Number(s))
@@ -51,6 +52,7 @@ function toDraft(s: LeagueSettings): Draft {
     gwWinnerAmount: String(s.gwWinnerAmount),
     seasonBestGwAmount: String(s.seasonBestGwAmount),
     rankPercentages: s.rankPercentages.map(String),
+    expenses: s.expenses.map((e) => ({ label: e.label, amount: String(e.amount) })),
   }
 }
 
@@ -63,6 +65,7 @@ function toSettings(d: Draft): LeagueSettings {
     gwWinnerAmount: num(d.gwWinnerAmount),
     seasonBestGwAmount: num(d.seasonBestGwAmount),
     rankPercentages: d.rankPercentages.map(num),
+    expenses: d.expenses.map((e) => ({ label: e.label, amount: num(e.amount) })),
   }
 }
 
@@ -70,19 +73,17 @@ export function SetupForm({
   leagueId,
   initial,
   gameweekCount,
-  managers,
-  initialManagerEntry,
+  managerCount,
   finalised,
 }: Props) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(initial))
-  const [managerEntry, setManagerEntry] = useState<number | null>(initialManagerEntry)
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; errors: string[] } | null>(null)
 
   const settings = useMemo(() => toSettings(draft), [draft])
   const errors = useMemo(
-    () => validateSettings(settings, gameweekCount, managers.length),
-    [settings, gameweekCount, managers.length],
+    () => validateSettings(settings, gameweekCount, managerCount),
+    [settings, gameweekCount, managerCount],
   )
   const pot = useMemo(
     () => computePot(toPrizeConfig(settings, gameweekCount)),
@@ -94,23 +95,27 @@ export function SetupForm({
   /**
    * Whether anything is unsaved.
    *
-   * Worth tracking because this section saves on a button while the lists below it save
-   * on every click — two save models on one page. The bar only appears when there is
+   * Worth tracking because this panel is the only one that saves on a button — the
+   * people and message settings write on every click. The bar only appears when there is
    * something to lose, which is what makes the difference legible instead of arbitrary.
    */
-  const dirty =
-    JSON.stringify(draft) !== JSON.stringify(toDraft(initial)) ||
-    managerEntry !== initialManagerEntry
+  const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(initial))
 
   const pctTotal = settings.rankPercentages.reduce((a, b) => a + b, 0)
   const feeSuggestion =
     settings.entryFee !== undefined && settings.entryFee > 0
-      ? settings.entryFee * managers.length
+      ? settings.entryFee * managerCount
       : null
 
   function edit(patch: Partial<Draft>) {
     setDraft({ ...draft, ...patch })
     setResult(null)
+  }
+
+  function setExpense(index: number, patch: Partial<{ label: string; amount: string }>) {
+    const next = [...draft.expenses]
+    next[index] = { ...next[index], ...patch }
+    edit({ expenses: next })
   }
 
   function setPct(index: number, value: string) {
@@ -126,8 +131,7 @@ export function SetupForm({
         leagueId,
         settings,
         gameweekCount,
-        managerCount: managers.length,
-        managerEntry,
+        managerCount,
       }),
     )
     setSaving(false)
@@ -182,10 +186,71 @@ export function SetupForm({
             className="self-start"
             onClick={() => edit({ potTotal: String(feeSuggestion) })}
           >
-            Use {managers.length} × {money(Math.round(settings.entryFee! * 100))} ={' '}
+            Use {managerCount} × {money(Math.round(settings.entryFee! * 100))} ={' '}
             {money(Math.round(feeSuggestion * 100))}
           </Button>
         )}
+      </Card>
+
+      {/* Between the pot and the prizes because that is the order the money moves in:
+          collected, spent, then shared out. */}
+      <Card
+        title="League expenses"
+        hint="Costs paid out of the pot before any prize. Each label is printed in the digest."
+        aside={
+          <span className="text-muted">
+            {pot.expensesCents > 0 ? `−${money(pot.expensesCents)}` : 'None'}
+          </span>
+        }
+      >
+        <ul className="flex flex-col gap-2">
+          {draft.expenses.map((expense, i) => (
+            <li key={i} className="flex items-center gap-2">
+              {/* Sizing lives on the wrapper, never appended to `inputClass`: it already
+                  carries `w-full`, and a second width utility on the same element is
+                  resolved by stylesheet order rather than by the order written here. The
+                  paid-places list below does the same for the same reason. `min-w-0` lets
+                  the label field actually shrink — a flex item's default floor is its
+                  content width, which is what pushes the amount box out of the card. */}
+              <div className="min-w-0 flex-1">
+                <input
+                  aria-label={`Expense ${i + 1} label`}
+                  placeholder="Trophy engraving"
+                  value={expense.label}
+                  onChange={(e) => setExpense(i, { label: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <div className="w-28 shrink-0">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  aria-label={`Expense ${i + 1} amount`}
+                  value={expense.amount}
+                  onChange={(e) => setExpense(i, { amount: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                aria-label={`Remove expense ${i + 1}`}
+                onClick={() => edit({ expenses: draft.expenses.filter((_, j) => j !== i) })}
+              >
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+
+        <Button
+          size="sm"
+          className="self-start"
+          onClick={() => edit({ expenses: [...draft.expenses, { label: '', amount: '' }] })}
+        >
+          Add an expense
+        </Button>
       </Card>
 
       <Card
@@ -222,6 +287,11 @@ export function SetupForm({
             label={`Fixed prizes (${gameweekCount} × ${money(summary.gwWinnerCents)} + best GW)`}
             value={`−${money(pot.committedFixedCents)}`}
           />
+          {/* Only when there are any: a permanent "Expenses −$0.00" row would suggest a
+              deduction to every league that has none. */}
+          {pot.expensesCents > 0 && (
+            <SummaryRow label="League expenses" value={`−${money(pot.expensesCents)}`} />
+          )}
           {/* Without a pot the remainder is minus the fixed commitments — true, and a
               figure nobody should read. */}
           <SummaryRow
@@ -298,25 +368,6 @@ export function SetupForm({
         </div>
       </Card>
 
-      <Card title="Your team" hint="Used to sign the messages you send. Each owner sets their own.">
-        <select
-          aria-label="Your FPL team in this league"
-          value={managerEntry ?? ''}
-          onChange={(e) => {
-            setManagerEntry(e.target.value === '' ? null : Number(e.target.value))
-            setResult(null)
-          }}
-          className={inputClass}
-        >
-          <option value="">I don&apos;t play in this league</option>
-          {managers.map((m) => (
-            <option key={m.entry} value={m.entry}>
-              {m.entryName} ({m.playerName})
-            </option>
-          ))}
-        </select>
-      </Card>
-
       {errors.length > 0 && (
         <Alert tone="danger">
           <ul className="flex flex-col gap-1">
@@ -334,8 +385,8 @@ export function SetupForm({
       )}
 
       {/* Sticky while these settings are on screen, so the save button is never below
-          three cards of scroll on a phone. It scrolls away with the section it belongs
-          to, which keeps it from claiming the lists further down the page. */}
+          three cards of scroll on a phone. It lives inside the panel it belongs to, which
+          is now also the only panel with anything to save. */}
       <div className="sticky bottom-0 -mx-4 border-t border-line bg-background/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-muted">
@@ -361,7 +412,15 @@ export function SetupForm({
 function describeError(error: ReturnType<typeof validateSettings>[number]): string {
   switch (error.code) {
     case 'fixed-exceeds-pot':
-      return 'Fixed prizes cost more than the pot holds.'
+      return error.expensesCents > 0
+        ? 'Fixed prizes and expenses cost more than the pot holds.'
+        : 'Fixed prizes cost more than the pot holds.'
+    case 'expense-missing-label':
+      return `Expense ${error.index + 1} needs a name - the digest prints it.`
+    case 'non-positive-expense':
+      return error.label === ''
+        ? 'An expense is worth nothing - remove it instead.'
+        : `“${error.label}” is worth nothing - remove it instead.`
     case 'percentages-not-100':
       return `Place percentages add up to ${error.sum}%, not 100%.`
     case 'no-paid-places':

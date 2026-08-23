@@ -54,6 +54,8 @@ export interface PrizeSummary {
   potCents: Cents
   gwWinnerCents: Cents
   seasonBestGwCents: Cents
+  /** League costs taken off the pot, itemised so the block can name each one. */
+  expenses: { label: string; amountCents: Cents }[]
   /** Amount per paid place, index 0 = 1st. */
   rankPrizeCents: Cents[]
 }
@@ -132,6 +134,86 @@ export function renderGwResults(stats: DigestStats): string {
   return lines.join('\n')
 }
 
+/** One money line of the prize block: what it is, and what it is worth. */
+export interface PrizeRow {
+  label: string
+  /** Negative for an expense, so it formats as `-$100.00` and reads as a deduction. */
+  cents: Cents
+}
+
+/**
+ * The prize block's money lines, in the order the money moves: collected, spent, then
+ * committed. Shared by all three renderers, which otherwise drift — the plaintext email
+ * has already been caught printing a pot the other two had learned to omit.
+ *
+ * Expenses carry a negative amount rather than a "Less" prefix. The sign is what marks a
+ * deduction in a column of figures, and it survives right-alignment, where a prefix
+ * pushes the label out instead.
+ */
+export function prizeRows(prize: PrizeSummary): PrizeRow[] {
+  const rows: PrizeRow[] = []
+
+  // Both the pot and its deductions are omitted when there is no pot: an expense listed
+  // under nothing to deduct it from is a subtraction with no subject.
+  if (prize.potSet) {
+    rows.push({ label: 'Pot', cents: prize.potCents })
+    for (const e of prize.expenses) rows.push({ label: e.label, cents: -e.amountCents })
+  }
+
+  rows.push({ label: 'Each GW winner', cents: prize.gwWinnerCents })
+  rows.push({ label: 'Best GW of season', cents: prize.seasonBestGwCents })
+  return rows
+}
+
+/** `1st`, `2nd`, `3rd`, `4th`… — the paid places, labelled for a column of their own. */
+export function ordinal(n: number): string {
+  const rest = n % 100
+  if (rest >= 11 && rest <= 13) return `${n}th`
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+}
+
+/**
+ * Right-aligns the amounts against the longest label.
+ *
+ * Only usable where the font is fixed-width — WhatsApp's ``` block and the plaintext
+ * email. In a proportional font the padding is invisible noise that still costs budget,
+ * which is why the HTML email uses a real table instead.
+ */
+export function alignRows(rows: PrizeRow[], currency: string): string[] {
+  const cells = rows.map((r) => ({ label: r.label, amount: formatCents(r.cents, currency) }))
+  const labelWidth = Math.max(...cells.map((c) => c.label.length))
+  const amountWidth = Math.max(...cells.map((c) => c.amount.length))
+
+  return cells.map((c) => `${c.label.padEnd(labelWidth)}  ${c.amount.padStart(amountWidth)}`)
+}
+
+/**
+ * The paid places, two per line.
+ *
+ * One per line is the honest layout and costs six lines of budget for a six-place league;
+ * two columns halves that while still lining up, which is the whole reason for the
+ * monospace block.
+ */
+export function placeLines(prize: PrizeSummary): string[] {
+  const cells = prize.rankPrizeCents.map((c, i) => ({
+    place: ordinal(i + 1),
+    amount: formatCents(c, prize.currency),
+  }))
+  if (cells.length === 0) return []
+
+  const placeWidth = Math.max(...cells.map((c) => c.place.length))
+  const amountWidth = Math.max(...cells.map((c) => c.amount.length))
+  const rendered = cells.map(
+    (c) => `${c.place.padEnd(placeWidth)} ${c.amount.padStart(amountWidth)}`,
+  )
+
+  const lines: string[] = []
+  for (let i = 0; i < rendered.length; i += 2) {
+    lines.push(rendered.slice(i, i + 2).join('   ').trimEnd())
+  }
+  return lines
+}
+
 /**
  * The prize block.
  *
@@ -139,20 +221,26 @@ export function renderGwResults(stats: DigestStats): string {
  * `$0.00`. The fixed prizes stay: they are amounts per winner rather than shares of a
  * total, so a league that has agreed its rules but not yet counted the money can still say
  * what a gameweek is worth without publishing a pot of nothing.
+ *
+ * Expenses appear as their own negative line under the pot rather than being folded into
+ * it. The pot line states what the league collected, and without the deduction beside it
+ * the prizes below no longer add up to the figure above — which somebody in a league of
+ * eighteen will notice, and read as an error.
+ *
+ * The figures sit in a ``` block because WhatsApp renders everything else in a
+ * proportional font, where padded columns do not line up and the padding is spent for
+ * nothing. Monospace is the only way the amounts actually align, and it costs the fences
+ * plus the padding against the ~1,500 character budget — which is why the places are laid
+ * out two to a line rather than six.
  */
 export function renderPrizeStructure(prize: PrizeSummary): string {
-  const money = (c: Cents) => formatCents(c, prize.currency)
-  const lines = ['*Prizes*']
-
-  if (prize.potSet) lines.push(`Pot: ${money(prize.potCents)}`)
-  lines.push(`Each GW winner: ${money(prize.gwWinnerCents)}`)
-  lines.push(`Best GW of season: ${money(prize.seasonBestGwCents)}`)
+  const lines = ['*Prizes*', '```', ...alignRows(prizeRows(prize), prize.currency)]
 
   // Each place's share is a slice of the remainder, so it is unknowable without a pot.
   if (prize.potSet && prize.rankPrizeCents.length > 0) {
-    const places = prize.rankPrizeCents.map((c, i) => `${i + 1}. ${money(c)}`).join('  ')
-    lines.push(`Final table: ${places}`)
+    lines.push('', ...placeLines(prize))
   }
 
+  lines.push('```')
   return lines.join('\n')
 }

@@ -76,6 +76,7 @@ Components are layered so the risky parts are isolated: the **FPL client** owns 
 | `recipients` | owner-maintained email list for a league. Separate from `managers` — the API gives no addresses, so the two drift |
 | `manager_gw_history` | one row per manager per GW, snapshotted from `entry/{id}/history` → `current[]` |
 | `prize_rules` | one row per rule: `kind`, optional `rank`, optional `gameweek`, `value`. Set once at league setup |
+| `league_expenses` | costs paid out of the pot before any prize: `label`, `amount`, `position`. The label is member-facing — the digest prints it |
 | `dues` | per manager: `amount`, `paid`, `paid_at`, `note` |
 | `winnings` | ledger: `manager_entry`, `rule_kind`, `gameweek`, `amount`, `status` (`provisional` \| `final`) |
 | `digests` | computed **structured stats** per league per GW (JSON), not rendered text. **Unique on `(league_id, gameweek)`** |
@@ -141,9 +142,23 @@ Prizes are configured once at league setup and then computed, never hand-entered
 ```
 committed_fixed = (gw_winner_amount × number_of_gameweeks)
                 + season_best_gw_amount
-remainder       = pot_total − committed_fixed
+expenses        = sum(league_expenses.amount)
+remainder       = pot_total − committed_fixed − expenses
 rank prizes     = season_rank_pct[i] × remainder
 ```
+
+**League expenses are the third term and behave exactly like the fixed prizes**: off the
+top, before any percentage applies. Trophy engraving is the reference league's case. They
+are itemised rather than a single total because the digest names each one — the prize block
+prints `Pot  $1,800.00` and then `Trophy engraving  -$100.00`, so what the league
+collected and what is left to share are both stated instead of leaving a subtraction for
+the members to notice. Leaving them out of `remainder` promises the top six money that has
+already been spent, and, like every other error in this section, it surfaces in May.
+
+They are validated with the pot, not separately: `committed_fixed + expenses ≤ pot_total`,
+which means a league whose fixed prizes fit can still be tipped over by an expense. That is
+why they live in `LeagueSettings` and save behind Setup's Save button rather than writing on
+each click like the owners and recipients lists — the set has to be validated whole.
 
 `number_of_gameweeks` comes from `events.length` in `bootstrap-static` (38, confirmed live) — never hardcode it, so a shortened season doesn't silently over-commit.
 

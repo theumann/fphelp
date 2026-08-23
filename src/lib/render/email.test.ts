@@ -36,6 +36,7 @@ const prize: PrizeSummary = {
   potCents: 180000,
   gwWinnerCents: 1500,
   seasonBestGwCents: 10000,
+  expenses: [],
   rankPrizeCents: [40000, 25000],
 }
 
@@ -163,8 +164,10 @@ describe('renderEmail with an unset pot', () => {
     const { html, text } = render({ prize: unset, blocks: ALL })
 
     for (const body of [html, text]) {
-      expect(body).toContain('Each GW winner: $15.00')
-      expect(body).toContain('Best GW of season: $100.00')
+      expect(body).toContain('Each GW winner')
+      expect(body).toContain('Best GW of season')
+      expect(body).toContain('$15.00')
+      expect(body).toContain('$100.00')
     }
   })
 
@@ -172,5 +175,47 @@ describe('renderEmail with an unset pot', () => {
     const { html, text } = render({ prize, blocks: ALL })
 
     for (const body of [html, text]) expect(body).toContain('$1,800.00')
+  })
+
+  /** Both renderings again: the HTML and the plaintext are separate code paths. */
+  it('names league expenses as a negative amount in both renderings', () => {
+    const withExpense: PrizeSummary = {
+      ...prize,
+      expenses: [{ label: 'Trophy engraving', amountCents: 10000 }],
+    }
+    const { html, text } = render({ prize: withExpense, blocks: ALL })
+
+    for (const body of [html, text]) {
+      expect(body).toContain('Trophy engraving')
+      expect(body).toContain('-$100.00')
+      expect(body).not.toContain('Less')
+    }
+  })
+
+  /**
+   * The HTML gets a table and the plaintext gets padded columns, because email clients
+   * do not agree on a monospace body font — the alignment WhatsApp needs its ``` block
+   * for is free here. The fences themselves are WhatsApp markup and must not leak in.
+   */
+  it('aligns the amounts without borrowing WhatsApp’s markup', () => {
+    const { html, text } = render({ prize, blocks: ALL })
+
+    expect(html).toContain('text-align:right')
+    expect(html).not.toContain('```')
+    expect(text).not.toContain('```')
+    // Two columns in the plaintext: label, then the amount padded out to a right edge.
+    expect(text).toMatch(/^Each GW winner +\$15\.00$/m)
+  })
+
+  // The label is owner-entered and lands in HTML, so it goes through `esc` like every
+  // other piece of typed-in text here.
+  it('escapes an expense label rather than injecting it as markup', () => {
+    const { html } = render({
+      prize: { ...prize, expenses: [{ label: '<b>Trophy</b>', amountCents: 10000 }] },
+      blocks: ALL,
+    })
+
+    expect(html).not.toContain('<b>Trophy</b>')
+    expect(html).toContain('&lt;b&gt;Trophy&lt;/b&gt;')
   })
 })

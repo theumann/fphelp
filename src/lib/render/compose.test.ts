@@ -32,6 +32,7 @@ const prize: PrizeSummary = {
   potCents: 180_000,
   gwWinnerCents: 1_500,
   seasonBestGwCents: 10_000,
+  expenses: [],
   rankPrizeCents: [45_200, 28_250, 16_950, 11_300, 6_780, 4_520],
 }
 
