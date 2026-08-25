@@ -44,7 +44,7 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
         |                 retry + backoff)
         |
         v
-[Railway cron]  --every 30-60min-->  poll event-status:
+[Railway cron]  --hourly, Sun-Wed-->  poll event-status:
         |                             bonus_added && leagues == "Updated"
         |                             x-check events[gw].data_checked
         v
@@ -305,7 +305,19 @@ retry is safe.
 
 Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky.
 
-**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Schedule `*/40 * * * *` (UTC); the exact cadence doesn't matter much because most runs are no-ops, but see [GW1-VERIFICATION §7](docs/GW1-VERIFICATION.md) — it was inherited from this document rather than measured.
+**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic.
+
+**Schedule `0 * * * 0-3` (UTC)** — hourly, Sunday through Wednesday. 96 runs a week.
+
+It was `*/40 * * * *` until 2026-08-25, described here as "every 40 minutes". **It was not.** A step in the minute field restarts each hour, so `*/40` fires at :00 and :40 only — gaps of 40 minutes, then 20, and **48 runs a day rather than the 36 this document and GW1-VERIFICATION §7 both assumed**. The live logs read `12:40, 13:00, 13:41, 14:00`, which is the tell.
+
+Why hourly is enough: nothing waits on this job inside an hour. The composer and the send gate read the FPL API live and never touch captured history — that data feeds the Phase 4 stats — and a partial capture is picked up by the next poll regardless.
+
+Why Sunday–Wednesday rather than the Monday–Tuesday actually observed: GW1 2026/27 settled Tuesday morning UTC (still provisional at 24 Aug 23:54Z, captured 12:40Z on the 25th), and an ordinary Sat–Sun gameweek should settle Monday. But December carries midweek gameweeks and blank/double gameweeks move the settling day around, so Wednesday is cheap insurance against the weeks that do not look like this one.
+
+**Why not tighter still**, e.g. a single weekly firing: that is only safe if a missed window self-heals, which depends on whether `history.current[]` returns the whole season or only recent gameweeks — [GW1-VERIFICATION §1](docs/GW1-VERIFICATION.md), unanswered until GW2's run, since `gameweeksSeen: [1]` fits both. If it backfills a full season the cadence can drop to roughly `0 12 * * 2` and lose nothing; if it does not, this is near the floor. Revisit with that answer in hand.
+
+Still unmeasured either way: what a scheduled firing actually costs in compute time. §7 has it.
 
 **Cron service configuration**, since it lives in the Railway dashboard rather than the repo. The service is **`cron-capture-history`**: separate from the web app (`fphelp-app`), same GitHub repo, no public domain.
 
@@ -320,7 +332,7 @@ Its configuration:
 
 **Known coupling:** `DATABASE_URL` is a *build-time* requirement for the app, not just a runtime one — the eager pool above plus `DrizzleAdapter(db, …)` at module scope in `src/auth.ts`. It doesn't affect the web service, which has the variable, but it will break any CI build or fresh environment without a database attached. Making it genuinely lazy needs the NextAuth setup restructured; a `Proxy` over `db` alone is not enough, because the adapter inspects the object on import.
 
-**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~150 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
+**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~95 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
 
 Completeness is measured as *distinct entries stored for that gameweek* against the roster size, not a "captured" flag. A run that lost two managers to a flaky API is therefore retried by the next poll automatically. A departed manager keeps their rows, so the comparison is `>=` — otherwise a shrinking roster would stall the poll into re-capturing forever.
 

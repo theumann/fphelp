@@ -38,7 +38,7 @@ Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects")
 | Service | What it is |
 | --- | --- |
 | `fphelp-app` | The web app. The one with a public domain, and the one `railway logs` / `railway ssh` usually mean |
-| `cron-capture-history` | Cron only, no domain. Runs `npm run job:capture` every 40 min. See ARCHITECTURE.md "Cron service configuration" |
+| `cron-capture-history` | Cron only, no domain. Runs `npm run job:capture` hourly, Sunday–Wednesday (`0 * * * 0-3` UTC). See ARCHITECTURE.md "Cron service configuration" |
 
 Services are named for **what they do**, not for the project — the project already provides that. New scheduled jobs get their own `cron-<job>` service rather than being added to this one, so the dashboard says which job is failing. Phase 3's deadline reminders will be the second.
 
