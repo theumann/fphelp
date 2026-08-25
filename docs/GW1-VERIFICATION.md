@@ -52,13 +52,18 @@ Also confirmed here, and the most valuable line in this document: the **league a
 
 ## 4. Record fixtures
 
-**Unblocked as of 2026-08-25, and this is the moment to do it.** Every collection is now non-empty and GW1 is final, which is the state the fixtures should freeze — a settled gameweek, `leagues: "Updated"`, all four `bonus_added: true`, 17 populated standings rows. Capturing a provisional payload instead would bake `"p"`/`false` into the suite and quietly make the gate's ready path untested. Nothing here has been captured yet; the items below are still all open.
+**Done 2026-08-25**, against a settled GW1 — `leagues: "Updated"`, all four `bonus_added: true`, 17 scored standings rows. Recording a provisional payload would have baked `"p"`/`false` into the suite and left the send gate's ready path untested, so the settled state was the one worth freezing.
 
-One caveat to settle while recording: the reference league is 17 managers, so its `standings` fits on a single page and `has_next` is `false`. A recorded payload alone will therefore **not** exercise the pagination assembly. Either record a larger public league alongside it or keep a hand-built multi-page fixture for that one case — see the note on fixture size below.
+- [x] Real payloads saved to `src/lib/fpl/recorded/`: `bootstrap-static.json`, `event-status.json`, `league-standings.json`, `entry-history.json`. Recorded by `npm run fpl:record`, which fetches **outside** `FplClient` so it writes the API's bytes before typing — a field the client silently drops is still captured. `bootstrap-static` keeps only `events`; the other ~1 MB is `elements` and `teams`, which this app never reads, and dropping them is the difference between a reviewable seasonal diff and a megabyte of noise.
+- [x] They are the change detector. `src/lib/fpl/recorded.test.ts` parses them through the real functions — `sendGate`, `buildRoster`, `leagueAverage`, `computeDigestStats`, `historyRows` — so drift fails `npm test` rather than a send. It asserts the gate **opens**, which is the path only a settled recording can reach.
+- [x] **Decision reversed: the hand-authored bodies in `src/lib/fpl/fixtures.ts` stay.** The original plan was to replace them, and that turns out to be a downgrade. The real league is 17 managers on one page, all scored, with no tie at the top, so swapping the bodies in would lose three cases the suite needs — a tie that must pool and split prizes, a manager with no scores yet, and standings past one page — in exchange for shape fidelity that file was never responsible for. The two cover different halves: recordings prove the app can read what FPL sends, fixtures prove it renders cases the real league does not contain. Revisit only if the league outgrows a page.
 
-- [ ] Save real payloads for `bootstrap-static/`, `event-status/`, `leagues-classic/9999999/standings/`, and one `entry/{id}/history` into the test fixtures directory.
-- [ ] These are the basis of the Vitest suite and double as a change detector for next season.
-- [ ] Replace the hand-authored bodies in `src/lib/fpl/fixtures.ts` with the recorded ones. Until then the Playwright suite proves the app renders what it is given, but nothing about whether the shape is right — the two are easy to confuse, and only this step closes the gap. Keep the fixture league larger than one page so the `has_next` assembly stays exercised.
+**Two findings fell out of recording**, which is the point of doing it:
+
+- `past[].rank_percentage` and `current[].overall_rank_percentage` are **strings** (`"18"`, `"0.5"`, `"1"`), not numbers. They had been typed as `number` since the shape was copied from the community client. Nothing reads either, so nothing was broken — the type is now correct and pinned by a test.
+- `chips[]` has real contents on a scored entry (`{name: "bboost", time, event}`), where it was only ever `[]` before. Still typed `unknown[]` and still unread.
+
+**The recorded payloads contain every manager's real name.** The repository is private and must stay private.
 
 ## 5. Sanity-check the computed stats
 
