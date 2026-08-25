@@ -1,9 +1,10 @@
 /**
  * FPL API response shapes.
  *
- * ✅ = confirmed against live calls. ⚠️ = taken from a typed community client and
- * NOT yet observed, because the collection is empty pre-season. See
- * docs/GW1-VERIFICATION.md — re-check these after GW1 is scored (21 Aug 2026).
+ * ✅ = confirmed against live calls. Every shape here was re-checked against a settled
+ * gameweek on 2026-08-25 and the payloads recorded to `./recorded/`, which
+ * `recorded.test.ts` parses on every run — so these types now have a change detector
+ * behind them rather than only a comment. See docs/GW1-VERIFICATION.md §2 and §4.
  */
 
 /** ✅ Confirmed live 2026-08-03. */
@@ -34,10 +35,10 @@ export interface BootstrapStatic {
  *
  *     {"bonus_added":false,"date":"2026-08-21","event":1,"points":""}
  *
- * `points` is `""` before a day's matches and `"p"` once they are played — observed
- * 2026-08-21. Nothing reads it. `bonus_added` is what the send gate turns on, and it was
- * still `false` on a completed match day, which is the whole reason the gate exists:
- * scores land well before bonus does.
+ * `points` is `""` before a day's matches, `"p"` while they are provisional, and `"r"` once
+ * final (2026-08-25). Nothing reads it. `bonus_added` is what the send gate turns on, and
+ * it stayed `false` for three days while scores were plainly visible — the whole reason the
+ * gate exists. Bonus was worth ~0.8 points per manager when it landed.
  */
 export interface EventStatusDay {
   date: string
@@ -47,17 +48,17 @@ export interface EventStatusDay {
 }
 
 /**
- * ✅ Envelope confirmed twice: `{status: [], leagues: ""}` pre-season, and a four-element
- * `status` during GW1.
+ * ✅ Envelope confirmed: `{status: [], leagues: ""}` pre-season, a four-element `status`
+ * during GW1, and the settled shape recorded 2026-08-25.
  *
- * ⚠️ `leagues` has three known values and only two have been seen: `""` before a
- * gameweek, and `"Updating"` while one is being played (observed 2026-08-21, 23:29Z).
- * `"Updated"` is what opens the send gate and has **still never been observed** — it is
- * the last unverified thing the trigger depends on. Re-check once GW1 settles.
+ * `leagues` has three values, all now observed: `"Updating"` while a gameweek is
+ * recalculating, `"Updated"` once it is final (2026-08-25 — this is what opens the send
+ * gate), and `""` otherwise. `""` is **not** "before a gameweek": it was the value
+ * throughout a live GW1 with every manager scored, so it means "not recalculating".
  *
- * Note what `"Updating"` proves: the field is not a two-state flag. Testing it for
- * anything other than equality with `"Updated"` — truthiness, say — would have opened the
- * gate mid-gameweek.
+ * The field is therefore not a two-state flag. Testing it for anything other than equality
+ * with `"Updated"` — truthiness, say — would have opened the gate mid-gameweek; testing it
+ * for emptiness would read a live gameweek as pre-season.
  */
 export interface EventStatus {
   status: EventStatusDay[]
@@ -132,7 +133,7 @@ export interface ClassicLeagueStandings {
   last_updated_data: string | null
 }
 
-/** ⚠️ `current[]` element fields unobserved — empty pre-season. */
+/** ✅ Confirmed live 2026-08-21, and recorded 2026-08-25. */
 export interface EntryHistoryEvent {
   event: number
   points: number
@@ -143,9 +144,16 @@ export interface EntryHistoryEvent {
   event_transfers_cost: number
 }
 
-/** ✅ Confirmed live: `past[]` fields and the top-level keys. */
+/**
+ * ✅ Confirmed live: `past[]` fields and the top-level keys.
+ *
+ * `rank_percentage` is a **string** (`"18"`, `"0.5"`), not a number — it was typed as a
+ * number from the community client until the recorded payload showed otherwise. Nothing
+ * reads it, so nothing was wrong; the same applies to `overall_rank_percentage` on
+ * `current[]`. Do not do arithmetic on either without parsing first.
+ */
 export interface EntryHistory {
   current: EntryHistoryEvent[]
-  past: { season_name: string; total_points: number; rank: number; rank_percentage?: number }[]
+  past: { season_name: string; total_points: number; rank: number; rank_percentage?: string }[]
   chips: unknown[]
 }

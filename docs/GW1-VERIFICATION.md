@@ -2,7 +2,9 @@
 
 Everything here is blocked on **GW1 being scored** (deadline 2026-08-21). Pre-season the collections are empty, so these cannot be checked earlier.
 
-Reference league: **9999999** ("The Sunday League"). Last checked 2026-08-05: 0 standings rows, 14 new entries.
+Reference league: **9999999** ("The Sunday League"). Pre-season 2026-08-05: 0 standings rows, 14 new entries. **As of 2026-08-25 GW1 is final** — 17 standings rows, 0 new entries, `sendGate()` open.
+
+Snapshots behind the findings below, all via `npm run fpl:snapshot`: 21 Aug 18:09Z and 23:29Z (kickoff, then first day scored), 24 Aug 21:20Z and 23:54Z (still provisional), 25 Aug 14:14Z (final).
 
 ---
 
@@ -14,7 +16,9 @@ The check could never have run in time: pre-season `current[]` is empty for ever
 
 `POST /api/jobs/capture-history` stores **every** gameweek `current[]` returns, so this question now only decides how much a single run recovers.
 
-Still worth observing on the first post-GW1 run:
+**The first post-GW1 run (2026-08-25, §7) did not settle this**, and could not have: it returned `gameweeksSeen: [1]`, which is equally consistent with "the whole season to date" and "recent gameweeks only" when the season is one gameweek long. **GW2's run is the first that can tell them apart** — read `gameweeksSeen` there and pick one of the two branches below.
+
+Still worth observing on that run:
 
 - **If `current[]` returns the whole season to date** — a missed run costs nothing; the next one backfills it. Running the job becomes routine rather than time-critical.
 - **If it only returns recent gameweeks** — the job must run every gameweek without fail, and the cron's reliability stops being a convenience. See §7.
@@ -27,11 +31,11 @@ The second historical gap is now partly covered: the capture job upserts `manage
 
 ## 2. Confirm the unverified endpoint shapes
 
-Diff real payloads against the ⚠️ rows in [ARCHITECTURE.md](../ARCHITECTURE.md#endpoint-reference).
+Diff real payloads against the endpoint table in [ARCHITECTURE.md](../ARCHITECTURE.md#endpoint-reference). **All four rows are now confirmed and the ⚠️ marks are gone** — the findings below are what cleared them.
 
 - [x] **`standings.results[]` element fields** — confirmed live 2026-08-21 23:29Z, and the community-typed shape was **wrong in two ways**: there is no `id` (declared required, never sent — nothing read it, so nothing broke), and there is an undocumented `club_badge_src`, null for every manager here. Everything else matched. `last_rank` is `0` for every manager after GW1, so rank movement must read `0` as "no previous rank" rather than as a climb from position zero — it does.
-- [ ] **`event-status.leagues`** — confirm it really is the string `"Updated"`. **Still unobserved**, and now known to have a third value: `""` before a gameweek, `"Updating"` while one is played (2026-08-21 23:29Z), and presumably `"Updated"` after. This is the last unverified thing the send trigger depends on. `"Updating"` also proves the field is not a two-state flag — a truthiness test would have opened the gate mid-gameweek.
-- [x] **`status[].bonus_added`** — the field exists. Confirmed 2026-08-21 18:09Z, the first time `status` has ever been non-empty. **Not yet seen flipping to `true`**: still `false` at 23:29Z on a match day whose games had finished and whose scores were in. That gap between "scores landed" and "bonus applied" is the entire reason this gate exists, and it is now observed rather than assumed. `status[].points` goes `""` → `"p"` when a day is played.
+- [x] **`event-status.leagues`** — **confirmed `"Updated"` on 2026-08-25 14:14Z**, when GW1 went final. The last unverified thing the send trigger depended on; `sendGate()` returned `{gameweek: 1, statsReady: true, reason: "ready"}` on the same snapshot. Three values are now observed — `""`, `"Updating"` (2026-08-21 23:29Z) and `"Updated"` — so the field is not a two-state flag and a truthiness test would have opened the gate mid-gameweek. **One correction to the earlier note:** `""` is *not* "before a gameweek". It was the value through both 24 Aug snapshots with GW1 live and all 17 managers scored, so it means "not currently recalculating" and covers pre-season and a live-but-idle gameweek alike. An emptiness test would read a live gameweek as pre-season.
+- [x] **`status[].bonus_added`** — **seen flipping to `true` on 2026-08-25 14:14Z**, all four rows together with `finished`, `data_checked` and `leagues`. Everything moves at once; there is no partial state to handle. The field first existed 2026-08-21 18:09Z, and stayed `false` at 23:29Z on a match day whose games had finished and whose scores were in, and again through 24 Aug 21:20Z and 23:54Z — three days of `false` on visible scores. That gap between "scores landed" and "bonus applied" is the entire reason the gate exists, and it is now measured, not assumed: see §5 for the points it moved. `status[].points` has a third value to match — `""` → `"p"` while provisional → `"r"` once final.
 - [x] **`history.current[]` element fields** — confirmed 2026-08-21 23:29Z. Every field we map is present, plus several we do not use (`rank_sort`, `percentile_rank`, `overall_rank_percentage`, `bank`, `value`, `event_transfers`). `past[]` is populated for a returning manager — 7 seasons on the one sampled.
 
 ## 3. Watch the standings / new_entries transition
@@ -41,22 +45,34 @@ The most interesting moment in the whole season for this app, and it only happen
 **Answered 2026-08-21, 23:29Z**, after the first day's matches were scored — earlier than expected. At kickoff (18:09Z) `standings.results` was still `0` with all 17 in `new_entries`; five hours later the move had completed.
 
 - [x] Do the 17 managers move from `new_entries` into `standings`? **Yes**, all 17.
-- [ ] Does any manager appear in **both** at once? **Not observed** — 0 in both, before and after. The dedupe-on-`entry` rule is therefore still unexercised. Keep it: costing nothing and being unproven is a better position than removing it on one weekend's evidence, since a manager joining mid-gameweek is exactly the case that would produce it.
+- [ ] Does any manager appear in **both** at once? **Not observed** — 0 in both, across all five snapshots now (21 Aug 18:09Z and 23:29Z, 24 Aug 21:20Z and 23:54Z, 25 Aug 14:14Z), spanning the transition and both sides of it. The dedupe-on-`entry` rule is therefore still unexercised. Keep it: costing nothing and being unproven is a better position than removing it on a season-opening weekend's evidence, since a manager joining mid-gameweek is exactly the case that would produce it — and no one joined during this one.
 - [x] Does `new_entries` empty out entirely? **Yes**, straight to 0.
 
 Also confirmed here, and the most valuable line in this document: the **league average is computed, not read**. `leagueAverage()` returned **9** while `events[0].average_entry_score` was **12** — two different numbers, and the app uses the right one.
 
 ## 4. Record fixtures
 
-- [ ] Save real payloads for `bootstrap-static/`, `event-status/`, `leagues-classic/9999999/standings/`, and one `entry/{id}/history` into the test fixtures directory.
-- [ ] These are the basis of the Vitest suite and double as a change detector for next season.
-- [ ] Replace the hand-authored bodies in `src/lib/fpl/fixtures.ts` with the recorded ones. Until then the Playwright suite proves the app renders what it is given, but nothing about whether the shape is right — the two are easy to confuse, and only this step closes the gap. Keep the fixture league larger than one page so the `has_next` assembly stays exercised.
+**Done 2026-08-25**, against a settled GW1 — `leagues: "Updated"`, all four `bonus_added: true`, 17 scored standings rows. Recording a provisional payload would have baked `"p"`/`false` into the suite and left the send gate's ready path untested, so the settled state was the one worth freezing.
+
+- [x] Real payloads saved to `src/lib/fpl/recorded/`: `bootstrap-static.json`, `event-status.json`, `league-standings.json`, `entry-history.json`. Recorded by `npm run fpl:record`, which fetches **outside** `FplClient` so it writes the API's bytes before typing — a field the client silently drops is still captured. `bootstrap-static` keeps only `events`; the other ~1 MB is `elements` and `teams`, which this app never reads, and dropping them is the difference between a reviewable seasonal diff and a megabyte of noise.
+- [x] They are the change detector. `src/lib/fpl/recorded.test.ts` parses them through the real functions — `sendGate`, `buildRoster`, `leagueAverage`, `computeDigestStats`, `historyRows` — so drift fails `npm test` rather than a send. It asserts the gate **opens**, which is the path only a settled recording can reach.
+- [x] **Decision reversed: the hand-authored bodies in `src/lib/fpl/fixtures.ts` stay.** The original plan was to replace them, and that turns out to be a downgrade. The real league is 17 managers on one page, all scored, with no tie at the top, so swapping the bodies in would lose three cases the suite needs — a tie that must pool and split prizes, a manager with no scores yet, and standings past one page — in exchange for shape fidelity that file was never responsible for. The two cover different halves: recordings prove the app can read what FPL sends, fixtures prove it renders cases the real league does not contain. Revisit only if the league outgrows a page.
+
+**Two findings fell out of recording**, which is the point of doing it:
+
+- `past[].rank_percentage` and `current[].overall_rank_percentage` are **strings** (`"18"`, `"0.5"`, `"1"`), not numbers. They had been typed as `number` since the shape was copied from the community client. Nothing reads either, so nothing was broken — the type is now correct and pinned by a test.
+- `chips[]` has real contents on a scored entry (`{name: "bboost", time, event}`), where it was only ever `[]` before. Still typed `unknown[]` and still unread.
+
+**The recorded payloads contain every manager's real name.** The repository is private and must stay private.
 
 ## 5. Sanity-check the computed stats
 
-- [ ] League average computed from `event_total` — confirm it differs from `events[].average_entry_score` (the global average). If they match, the wrong one is being used.
-- [ ] GW winner matches the real top scorer.
-- [ ] Rank movement from `last_rank` looks right for GW2 onward (GW1 has no previous rank — check what `last_rank` holds when there is no prior gameweek).
+**Checked against the final GW1 numbers, 2026-08-25 14:14Z.**
+
+- [x] League average computed from `event_total` — **differs, every time.** Final: `leagueAverage()` **53.65** against a global `average_entry_score` of **50**. The two have never once matched across five snapshots (9 vs 12 on 21 Aug; 52.82 vs 36, then 52.82 vs 48 on 24 Aug), and the global figure moved by 12 points in a single evening while our league's held still — they are not the same quantity and cannot be substituted.
+- [x] GW winner matches the real top scorer — `Bald Fraud United`, 79, stable across all three post-scoring snapshots.
+- [x] **The bonus gap, quantified.** League average **52.82 → 53.65** between the last provisional snapshot and the final one, with no fixtures left to play. That is roughly 0.8 points per manager arriving after the scores already looked complete, and it is enough to reorder a tight table. This is the concrete answer to "why not just gate on `finished`".
+- [ ] Rank movement from `last_rank` looks right — **still open, and cannot be checked until GW2.** GW1 answers the parenthetical only: `last_rank` is `0` for every manager when there is no prior gameweek, and `biggestRiser`/`biggestFaller` correctly render `—` rather than treating it as a climb from position zero.
 
 ## 6. Not blocked on GW1 — do these sooner
 
@@ -128,11 +144,22 @@ The service is `cron-capture-history`, not `fphelp-app` — these checks read *i
 railway logs --service cron-capture-history
 ```
 
-- [ ] **The capture branch itself.** Confirm the first post-GW1 run returns `skipped: false` with `rowsSaved > 0`, and that `gameweeksSeen` contains GW1.
-- [ ] **`dropped` and `failed` are empty.** Non-empty `dropped` means `history.current[]` fields didn't match §2 and rows were discarded rather than stored wrong — that is the check firing, not failing, but it needs investigating the same day.
-- [ ] **The gate held.** The capture should happen *after* bonus points settle, not when `finished` first flips. If history lands with pre-bonus scores, `isGameweekReady` is wrong and the composer inherits the same bug.
-- [ ] **`already-captured` engages.** Every poll for the rest of that week should skip with that reason. If it re-captures hourly, the entry-count comparison in `captureDecision` isn't matching the roster.
-- [ ] **18 sequential FPL calls survive Cloudflare.** The egress check (§6) was four calls; this is the first burst. A `blocked: true` response with `savedBeforeBlock` is the signal.
+**The first real capture ran 2026-08-25 12:40:39Z, and every check passed.**
+
+```
+12:40:39Z  {gameweek:1, rowsSaved:17, gameweeksSeen:[1], dropped:[], failed:[]}
+13:00:30Z  {skipped:true, reason:"already-captured", gameweek:1}
+13:41:14Z  {skipped:true, reason:"already-captured", gameweek:1}
+14:00:44Z  {skipped:true, reason:"already-captured", gameweek:1}
+```
+
+- [x] **The capture branch itself** — `skipped: false`, `rowsSaved: 17` (the whole roster), `gameweeksSeen: [1]`.
+- [x] **`dropped` and `failed` are empty.** Nothing discarded and nobody lost, which independently corroborates §2: every `history.current[]` row parsed against the mapping. This also clears ROADMAP.md's ⚠️ on the capture mapping never having parsed a real scored gameweek.
+- [x] **The gate held**, and this is the one that mattered. Every poll from the GW1 deadline through 24 Aug skipped; the capture is at 12:40Z on the 25th, *after* bonus settled. History therefore stores final scores. Had it fired when `finished` first flipped it would have stored numbers ~0.8/manager light — see §5.
+- [x] **`already-captured` engages** — three consecutive skips at :00, :40, :00, so the entry-count comparison matches the roster and there is no hourly re-capture.
+- [x] **18 sequential FPL calls survive Cloudflare** — 17 here, no `blocked: true`, no `savedBeforeBlock`. First real burst; single sample, so the proxy mitigation stays on the books.
+
+**One defect found, and fixed on the same branch as this write-up.** Every skip during the live-but-unsettled gameweek logged `reason: "pre-season"` — on 24 August, with a gameweek in progress and all 17 managers scored. That is the `lastFinishedGameweek() === null` conflation the composer already fixes via `liveGameweek()`; `captureDecision` was not making the same split. The decision was right in both states (skip either way) and no data was affected, but the logged reason is the first thing anyone reads when capture fails to fire, and it was wrong. It now reports `not-finished` with the live gameweek named.
 
 ### Revisit the cadence — and check what a scheduled run costs
 

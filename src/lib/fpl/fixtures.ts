@@ -18,11 +18,16 @@ import type {
  *
  * Two things this is not:
  *
- * - **Not a recorded fixture.** `docs/GW1-VERIFICATION.md` §4 records real payloads once
- *   GW1 is scored, and those are the change detector for shape drift. This is
- *   hand-authored, so it proves the app renders what it is given — never that the shape
- *   is right. When the real payloads land they replace the bodies here, and these tests
- *   become meaningful about shape too.
+ * - **Not a recorded fixture.** `./recorded/*.json` holds the real API's bytes and
+ *   `recorded.test.ts` is the change detector for shape drift. This file is hand-authored,
+ *   so it proves the app renders what it is given — never that the shape is right.
+ *
+ *   It is deliberately **not** replaced by the recordings, which was the original plan.
+ *   The real league is 17 managers on one page, all scored, with no tie at the top: swapping
+ *   these bodies for it would trade three cases the suite needs — a tie that must pool and
+ *   split, a joiner with no scores, and standings past one page — for shape fidelity this
+ *   file was never responsible for. The two cover different halves. Revisit only if the
+ *   league grows past a page and happens to tie.
  * - **Not reachable in production.** It is gated on an environment variable that Railway
  *   never sets, and it announces itself on stderr when it activates, because a silent
  *   fake API serving a real league is the worst failure this file could have.

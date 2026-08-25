@@ -1,0 +1,216 @@
+{
+  "league": {
+    "admin_entry": 8000002,
+    "closed": false,
+    "code_privacy": "p",
+    "created": "2026-07-23T17:32:06.465586Z",
+    "cup_league": null,
+    "has_cup": true,
+    "id": 9999999,
+    "league_type": "x",
+    "max_entries": null,
+    "name": "The Sunday League",
+    "rank": null,
+    "scoring": "c",
+    "start_event": 1
+  },
+  "standings": {
+    "has_next": false,
+    "page": 1,
+    "results": [
+      {
+        "club_badge_src": null,
+        "entry": 8000008,
+        "entry_name": "Bald Fraud United",
+        "event_total": 79,
+        "last_rank": 0,
+        "player_name": "Drew Kowalczyk",
+        "rank": 1,
+        "rank_sort": 1,
+        "total": 79
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000013/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000013,
+        "entry_name": "Guehi Wire",
+        "event_total": 72,
+        "last_rank": 0,
+        "player_name": "Reese Andersson",
+        "rank": 2,
+        "rank_sort": 2,
+        "total": 72
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000002,
+        "entry_name": "Haaland Oates",
+        "event_total": 67,
+        "last_rank": 0,
+        "player_name": "Kai Thorvaldsen",
+        "rank": 3,
+        "rank_sort": 3,
+        "total": 67
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000011/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000011,
+        "entry_name": "Watkins Glen",
+        "event_total": 67,
+        "last_rank": 0,
+        "player_name": "Thierry Heumann",
+        "rank": 3,
+        "rank_sort": 4,
+        "total": 67
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000009/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000009,
+        "entry_name": "Wirtz Case Scenario",
+        "event_total": 61,
+        "last_rank": 0,
+        "player_name": "Cyril Fluck",
+        "rank": 5,
+        "rank_sort": 5,
+        "total": 61
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000012,
+        "entry_name": "Kane & Able",
+        "event_total": 60,
+        "last_rank": 0,
+        "player_name": "Indigo Mwangi",
+        "rank": 6,
+        "rank_sort": 6,
+        "total": 60
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000004/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000004,
+        "entry_name": "Solanke Dream",
+        "event_total": 59,
+        "last_rank": 0,
+        "player_name": "Quinn Papadopoulos",
+        "rank": 7,
+        "rank_sort": 7,
+        "total": 59
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000017,
+        "entry_name": "Foden Paradise",
+        "event_total": 55,
+        "last_rank": 0,
+        "player_name": "Sam Okafor",
+        "rank": 8,
+        "rank_sort": 8,
+        "total": 55
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000007,
+        "entry_name": "Coming Home FC",
+        "event_total": 54,
+        "last_rank": 0,
+        "player_name": "Frankie Delacroix",
+        "rank": 9,
+        "rank_sort": 9,
+        "total": 54
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000001,
+        "entry_name": "Saka Potatoes",
+        "event_total": 54,
+        "last_rank": 0,
+        "player_name": "Dana Whitfield",
+        "rank": 9,
+        "rank_sort": 10,
+        "total": 54
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000005/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000005,
+        "entry_name": "Mbeumo Rhapsody",
+        "event_total": 50,
+        "last_rank": 0,
+        "player_name": "Morgan Achterberg",
+        "rank": 11,
+        "rank_sort": 11,
+        "total": 50
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000010,
+        "entry_name": "Semenyo Say",
+        "event_total": 46,
+        "last_rank": 0,
+        "player_name": "Emerson Castellanos",
+        "rank": 12,
+        "rank_sort": 12,
+        "total": 46
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000015,
+        "entry_name": "Salah Good Men",
+        "event_total": 44,
+        "last_rank": 0,
+        "player_name": "Georgie Ravensworth",
+        "rank": 13,
+        "rank_sort": 13,
+        "total": 44
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000016,
+        "entry_name": "Palmer Violence",
+        "event_total": 43,
+        "last_rank": 0,
+        "player_name": "Jordan Silva",
+        "rank": 14,
+        "rank_sort": 14,
+        "total": 43
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000003,
+        "entry_name": "Gordon Ramsay FC",
+        "event_total": 39,
+        "last_rank": 0,
+        "player_name": "Casey Lindqvist",
+        "rank": 15,
+        "rank_sort": 15,
+        "total": 39
+      },
+      {
+        "club_badge_src": "https://fantasy.premierleague.com/gcs/plfpl-production-adobe-approved/plfpl-production/8000014/00000000-0000-4000-8000-000000000000.png",
+        "entry": 8000014,
+        "entry_name": "Isak Newton",
+        "event_total": 34,
+        "last_rank": 0,
+        "player_name": "Blake O’Sullivan",
+        "rank": 16,
+        "rank_sort": 16,
+        "total": 34
+      },
+      {
+        "club_badge_src": null,
+        "entry": 8000006,
+        "entry_name": "Nketiah Later",
+        "event_total": 28,
+        "last_rank": 0,
+        "player_name": "Riley Fitzgerald",
+        "rank": 17,
+        "rank_sort": 17,
+        "total": 28
+      }
+    ]
+  },
+  "last_updated_data": "2026-08-25T16:13:16Z",
+  "new_entries": {
+    "has_next": false,
+    "page": 1,
+    "results": []
+  }
+}

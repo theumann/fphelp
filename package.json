@@ -19,7 +19,8 @@
     "db:bootstrap": "node --import tsx scripts/bootstrap-owner.mts",
     "db:clear-digest": "node --env-file-if-exists=.env --import tsx scripts/clear-test-digest.mts",
     "job:capture": "node --import tsx scripts/capture-history.mts",
-    "fpl:snapshot": "node --import tsx scripts/fpl-snapshot.mts"
+    "fpl:snapshot": "node --import tsx scripts/fpl-snapshot.mts",
+    "fpl:record": "node --import tsx scripts/record-fixtures.mts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
