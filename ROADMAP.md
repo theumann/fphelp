@@ -84,8 +84,9 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
   - ✅ **Built** as `POST /api/jobs/capture-history`, guarded by a `JOBS_TOKEN` bearer token. It also upserts `managers`, which is the only record of who was in the league at a given time.
   - It stores **every gameweek `current[]` returns**, not just the latest. That makes a missed run self-healing, and means the backfill question below decides only how much one run recovers — not whether the data is lost.
-  - ✅ **Scheduled** via the `cron-capture-history` Railway service running `npm run job:capture` every 40 minutes. Polls are gated on `captureDecision`, so they cost two FPL calls and skip until a gameweek has finished *and* settled; a partial capture is retried by the next poll. The service exists and is configured (`APP_URL` + `JOBS_TOKEN`); what remains is that it has never run the capture branch against real data — see below.
-  - ⚠️ **Unexercised against real data** — pre-season `current[]` is empty for every manager, so the mapping is unit-tested but has never parsed a real scored gameweek. Re-check on the first run after GW1.
+  - ✅ **Scheduled** via the `cron-capture-history` Railway service running `npm run job:capture` every 40 minutes. Polls are gated on `captureDecision`, so they cost two FPL calls and skip until a gameweek has finished *and* settled; a partial capture is retried by the next poll.
+  - ✅ **Exercised against real data** — first real capture 2026-08-25 12:40Z: GW1, 17 rows, `dropped` and `failed` both empty, and the gate correctly withheld it until after bonus settled rather than when `finished` flipped. The mapping has now parsed a real scored gameweek. See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §7.
+  - Still open: whether `current[]` **backfills** a season or only returns recent gameweeks. GW1 alone cannot tell those apart — `gameweeksSeen: [1]` is consistent with both. GW2 is the first run that answers it, and it decides whether a missed poll costs anything.
 
 ### Phase 2 — money pot, dues and winnings
 - Owner enters the **pot total directly**, plus prize rules, configured once at setup

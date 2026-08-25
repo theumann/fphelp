@@ -13,7 +13,7 @@ export interface Readiness {
   reason: ReadinessReason
 }
 
-/** ⚠️ Unconfirmed: the live value of `event-status.leagues` when a GW completes. */
+/** Confirmed live 2026-08-25, when GW1 went final. `""` and `"Updating"` are the others. */
 const LEAGUES_UPDATED = 'Updated'
 
 /**

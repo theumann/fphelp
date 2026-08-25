@@ -1,4 +1,9 @@
-import { isGameweekReady, lastFinishedGameweek, type ReadinessReason } from './gameweek'
+import {
+  isGameweekReady,
+  lastFinishedGameweek,
+  liveGameweek,
+  type ReadinessReason,
+} from './gameweek'
 import type { BootstrapStatic, EventStatus } from './types'
 
 export type CaptureReason = ReadinessReason | 'pre-season' | 'already-captured'
@@ -43,8 +48,21 @@ export function captureDecision(input: CaptureInput): CaptureDecision {
   const { bootstrap, status, rosterSize, capturedEntries, force = false } = input
 
   const gameweek = lastFinishedGameweek(bootstrap)
-  // Pre-season nobody has scored. There is no history to miss and no gameweek to name.
-  if (gameweek === null) return { capture: false, gameweek: null, reason: 'pre-season' }
+  if (gameweek === null) {
+    /**
+     * `lastFinishedGameweek() === null` covers two opposite states, and the skip is right
+     * for both — but the *reason* is logged, and for three days of GW1 2026/27 it said
+     * `pre-season` while a gameweek was live with all 17 managers scored. Nothing captured
+     * wrongly; the log simply lied about why, which is the first field anyone would read if
+     * capture ever failed to fire when it should. `sendGate` splits the same pair the same
+     * way — see `liveGameweek`.
+     */
+    const live = liveGameweek(bootstrap)
+    if (live !== null) return { capture: false, gameweek: live, reason: 'not-finished' }
+
+    // Genuinely pre-season: nobody has scored, so there is no history to miss.
+    return { capture: false, gameweek: null, reason: 'pre-season' }
+  }
 
   const readiness = isGameweekReady(bootstrap, status, gameweek)
   if (!readiness.ready) return { capture: false, gameweek, reason: readiness.reason }

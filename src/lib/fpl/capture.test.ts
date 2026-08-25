@@ -52,6 +52,15 @@ describe('captureDecision', () => {
     expect(decision).toEqual({ capture: false, gameweek: null, reason: 'pre-season' })
   })
 
+  /**
+   * Both states skip, so this is about the logged reason rather than the decision. It read
+   * `pre-season` for three days of a live, fully-scored GW1 in 2026/27.
+   */
+  it('names a live gameweek rather than calling it pre-season', () => {
+    const bootstrap = { events: [event({ id: 1, is_current: true })] }
+    expect(decide({ bootstrap })).toEqual({ capture: false, gameweek: 1, reason: 'not-finished' })
+  })
+
   /** The trap this whole gate exists for: `finished` flips before bonus points apply. */
   it('skips a finished gameweek whose bonus points are still pending', () => {
     const status: EventStatus = {
