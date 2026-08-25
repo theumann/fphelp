@@ -1,5 +1,6 @@
 import { networkInterfaces } from "node:os";
 
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 /**
@@ -41,4 +42,27 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 };
 
-export default nextConfig;
+/**
+ * Sentry's build step, which uploads source maps so a stack trace names a line of
+ * TypeScript rather than a minified chunk.
+ *
+ * Gated on `SENTRY_AUTH_TOKEN` being present. Without it the wrapper is skipped entirely,
+ * so `npm run build` works unchanged on a fresh clone, in the Playwright suite, and in any
+ * CI that has no Sentry credentials — a monitoring tool must not be able to fail a build.
+ * Railway has the token; nothing else needs it.
+ */
+const sentryEnabled = Boolean(process.env.SENTRY_AUTH_TOKEN);
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      // The build log is read when a deploy fails; Sentry's own chatter is not the reason.
+      silent: true,
+      // Uploaded, then deleted from the output — never served to a browser.
+      sourcemaps: { deleteSourcemapsAfterUpload: true },
+      // No client SDK is installed, so there is no tunnel route and nothing to proxy.
+      disableLogger: true,
+    })
+  : nextConfig;

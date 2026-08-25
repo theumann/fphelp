@@ -42,6 +42,12 @@ Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects")
 
 Services are named for **what they do**, not for the project — the project already provides that. New scheduled jobs get their own `cron-<job>` service rather than being added to this one, so the dashboard says which job is failing. Phase 3's deadline reminders will be the second.
 
+## Monitoring
+
+Sentry, server-side only, **entirely optional** — no `SENTRY_DSN` means the SDK never initialises and every call no-ops, so local dev and both test suites need no configuration. `next.config.ts` skips `withSentryConfig` unless `SENTRY_AUTH_TOKEN` is set, so builds work without credentials. Don't make either one required.
+
+The cron's Sentry check-in **upserts its own schedule** (`monitorConfig` in `scripts/capture-history.mts`, currently `0 * * * 0-3`). Change the Railway cron and you must change that string too, or the monitor alarms every Thursday when the job correctly isn't running. See ARCHITECTURE.md "Monitoring".
+
 ## Conventions
 
 - Digest computation is **pure functions over fetched JSON**. Keep fetching, computing, and rendering separate; the computation layer is where the tests live.

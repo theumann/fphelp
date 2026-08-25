@@ -368,6 +368,32 @@ The FPL client should treat a sudden run of `403`s, or an HTML content type wher
 
 This still drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
 
+## Monitoring
+
+**What is worth monitoring here is not what is usually worth monitoring.** One owner opens this app roughly once a week to write a digest; if it is down on a Thursday afternoon, nobody — including the owner — finds out or cares. Uptime is close to a non-question. The failures that matter are silent, server-side, and would otherwise surface weeks later:
+
+| Failure | Caught by |
+| --- | --- |
+| Cloudflare starts blocking Railway's egress (`FplBlockedError`) | Sentry, via `onRequestError` or the cron's `captureException` |
+| A digest half-sends through Resend | Sentry (the Server Action throws) |
+| A database error inside `/setup` or `/send` | Sentry, via `onRequestError` |
+| **The cron silently stops firing** | Sentry Crons check-in |
+| FPL changes an endpoint's shape | `recorded.test.ts`, not monitoring — it fails `npm test` |
+
+**Sentry is optional by construction.** With no `SENTRY_DSN` the SDK never initialises and every call is a no-op, so a fresh clone, `npm test` and the Playwright suite need no configuration and send nothing. `next.config.ts` only applies `withSentryConfig` when `SENTRY_AUTH_TOKEN` is set, so a build without credentials is unaffected. A monitoring tool that can break the build or the boot has made things worse, not better.
+
+Node only: there is no middleware, no route opts into the edge runtime, and **no client SDK is installed**, so the browser bundle is unchanged and there is no public DSN to manage. Add `sentry.edge.config.ts` / `instrumentation-client.ts` if that changes.
+
+`tracesSampleRate` is `0` and `sendDefaultPii` is `false`. Traces are what consume a free-tier quota and there is no latency question worth sampling at this volume; PII is off because a Server Action payload can carry the digest text and the league's recipient addresses, which have no business in a third-party error tracker for members who never signed up to anything.
+
+**Cron check-ins, and why the monitor's schedule lives in the repo.** `scripts/capture-history.mts` opens a check-in before the POST and closes it `ok` or `error` after, upserting the monitor's config as it goes — including the crontab `0 * * * 0-3`. That last part is what makes the narrowed schedule safe: a fixed-interval heartbeat ("expect a ping hourly") would alarm every Thursday through Saturday, when the job deliberately does not run. Giving Sentry the same cron expression means it expects the silence. **If the Railway schedule changes, change `monitorConfig` too** — a monitor that disagrees with reality trains you to ignore it.
+
+A skipped poll checks in as `ok`, deliberately. Roughly 95 of every 96 weekly runs are skips; reporting those as failures would be an alert that cries wolf, which is worse than no alert.
+
+Required only in production, all on the `fphelp-app` and `cron-capture-history` services: `SENTRY_DSN`, plus `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` on the app service for source-map upload. A bad or missing auth token degrades to unreadable stack traces; it does not fail the deploy — verified locally.
+
+**What is deliberately not here.** UptimeRobot answers a question this app does not have, though it costs nothing to keep. Postgres triggers with `LISTEN`/`NOTIFY` to alert on row inserts were considered and rejected: they need a persistent listener, which is another always-on service that can itself die silently. The app already knows when it writes a `messages` or `deliveries` row, and has context the row does not — so notifications belong on the write path, not in the database.
+
 ## Testing strategy
 
 - **Vitest — digest computation.** Highest value, because the logic is pure functions over fetched JSON and the bugs are silent-wrong-number bugs, not crashes. Cover: league average from `event_total` (never `average_entry_score`), rank movement from `last_rank`, GW winner, riser/faller, pagination assembly across `has_next`, `standings ∪ new_entries` roster completeness, prize splits summing to the entered pot. Driven by **recorded fixtures** of real payloads, which double as a change detector against an unofficial API.
