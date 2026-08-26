@@ -46,6 +46,8 @@ Services are named for **what they do**, not for the project — the project alr
 
 Sentry, server-side only, **entirely optional** — no `SENTRY_DSN` means the SDK never initialises and every call no-ops, so local dev and both test suites need no configuration. `next.config.ts` skips `withSentryConfig` unless `SENTRY_AUTH_TOKEN` is set, so builds work without credentials. Don't make either one required.
 
+The Sentry org and project are **literals in `next.config.ts`**, deliberately — they are slugs, not secrets, and the token is the only credential worth keeping in the environment. If the project is renamed in Sentry, update that literal: the DSN keeps working regardless (it is keyed on the numeric project ID), so the only symptom is source maps silently ceasing to upload.
+
 The cron's Sentry check-in **upserts its own schedule** (`monitorConfig` in `scripts/capture-history.mts`, currently `0 * * * 0-3`). Change the Railway cron and you must change that string too, or the monitor alarms every Thursday when the job correctly isn't running. See ARCHITECTURE.md "Monitoring".
 
 ## Conventions

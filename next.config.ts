@@ -50,13 +50,27 @@ const nextConfig: NextConfig = {
  * so `npm run build` works unchanged on a fresh clone, in the Playwright suite, and in any
  * CI that has no Sentry credentials — a monitoring tool must not be able to fail a build.
  * Railway has the token; nothing else needs it.
+ *
+ * The org and project are **literals, not environment variables**. Neither is a secret —
+ * they are slugs, visible in every Sentry URL — and putting them here means this file
+ * states where errors go, instead of that answer living in a dashboard nobody opens while
+ * reading code. The token stays in the environment because it is the only actual
+ * credential. Getting these two wrong costs readable stack traces, nothing more: the
+ * upload fails, `silent: true` swallows it, and the deploy succeeds regardless.
+ *
+ * If the project slug is ever changed in Sentry, change it here — the DSN keeps working
+ * either way, since it is keyed on the numeric project ID, so the only symptom is source
+ * maps quietly ceasing to upload.
  */
+const SENTRY_ORG = "theapps";
+const SENTRY_PROJECT = "fphelp";
+
 const sentryEnabled = Boolean(process.env.SENTRY_AUTH_TOKEN);
 
 export default sentryEnabled
   ? withSentryConfig(nextConfig, {
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
+      org: SENTRY_ORG,
+      project: SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       // The build log is read when a deploy fails; Sentry's own chatter is not the reason.
       silent: true,

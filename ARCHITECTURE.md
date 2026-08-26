@@ -390,7 +390,17 @@ Node only: there is no middleware, no route opts into the edge runtime, and **no
 
 A skipped poll checks in as `ok`, deliberately. Roughly 95 of every 96 weekly runs are skips; reporting those as failures would be an alert that cries wolf, which is worse than no alert.
 
-Required only in production, all on the `fphelp-app` and `cron-capture-history` services: `SENTRY_DSN`, plus `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` on the app service for source-map upload. A bad or missing auth token degrades to unreadable stack traces; it does not fail the deploy — verified locally.
+**Configuration.** Only two variables, both set in Railway and required only in production:
+
+| Variable | `fphelp-app` | `cron-capture-history` | Purpose |
+| --- | --- | --- | --- |
+| `SENTRY_DSN` | ✅ | ✅ | Turns the SDK on. The cron needs its own copy or check-ins never happen |
+| `SENTRY_ENVIRONMENT` | ✅ | ✅ | `production`. Falls back to `NODE_ENV`, which is right on Railway but implicit |
+| `SENTRY_AUTH_TOKEN` | ✅ | — | Source-map upload only. The cron runs no build |
+
+The org (`theapps`) and project (`fphelp`) are **literals in `next.config.ts`**, not environment variables. Neither is a secret — both appear in every Sentry URL — and hardcoding them means the file says where errors go rather than that answer living in a dashboard. The token is the only real credential, and it is the only thing left in the environment. Note the DSN is deliberately **not** `NEXT_PUBLIC_SENTRY_DSN`: that prefix exists to inline a DSN into the browser bundle, and there is no client SDK here.
+
+A bad or missing auth token degrades to unreadable stack traces; it does not fail the deploy — verified locally against a bogus token. The same is true of a stale project slug, which is the failure to watch for if the project is ever renamed in Sentry: the DSN keeps working, because it is keyed on the numeric project ID, so source maps stop uploading in silence.
 
 **What is deliberately not here.** UptimeRobot answers a question this app does not have, though it costs nothing to keep. Postgres triggers with `LISTEN`/`NOTIFY` to alert on row inserts were considered and rejected: they need a persistent listener, which is another always-on service that can itself die silently. The app already knows when it writes a `messages` or `deliveries` row, and has context the row does not — so notifications belong on the write path, not in the database.
 
