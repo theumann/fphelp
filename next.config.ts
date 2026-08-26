@@ -76,7 +76,13 @@ export default sentryEnabled
       silent: true,
       // Uploaded, then deleted from the output — never served to a browser.
       sourcemaps: { deleteSourcemapsAfterUpload: true },
-      // No client SDK is installed, so there is no tunnel route and nothing to proxy.
-      disableLogger: true,
+      /**
+       * No `disableLogger` (nor its replacement, `webpack.treeshake.removeDebugLogging`).
+       * It tree-shakes the SDK's own logging statements to slim the bundle, which is a
+       * browser concern — and there is no client SDK here, so there is no browser bundle
+       * carrying Sentry code to slim. Setting it bought nothing and printed a deprecation
+       * warning into the startup logs on every boot, which are the logs read when a deploy
+       * has gone wrong. Add it back under the new name if a client SDK is ever installed.
+       */
     })
   : nextConfig;
