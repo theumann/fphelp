@@ -165,6 +165,12 @@ railway logs --service cron-capture-history
 
 `*/40 * * * *` was inherited from ARCHITECTURE.md's "every 30-60 min", not measured against anything.
 
-- [ ] **Time a *scheduled* run** (not a manual trigger — that's a full redeploy: `npm ci` plus the pre-deploy migration, ~5 min, and not representative). A scheduled firing should start the existing image and exit in seconds. If it's minutes, 36 runs/day is ~90 compute-hours a month instead of ~5-8, and the cadence needs cutting immediately.
-- [ ] **Narrow the window.** Gameweeks settle Sunday evening through Tuesday. Once the real settling time is known, `*/40 * * * 0-2` cuts polls ~60% at no cost to capture latency — the self-healing backfill covers anything unusual.
+- [x] **Narrowed 2026-08-25 to `0 * * * 0-3`** — hourly, Sunday through Wednesday. 96 runs a week against the previous 336, a 71% cut, at no cost to capture latency: nothing waits on this job inside an hour, since the composer and send gate read the FPL API live and never touch captured history.
+
+  **`*/40` was never "every 40 minutes."** A step in the minute field restarts each hour, so it fired at :00 and :40 — 40 minutes apart, then 20 — which is **48 runs a day, not the 36 assumed here and in ARCHITECTURE.md**. The live logs read `12:40, 13:00, 13:41, 14:00`. Both documents are corrected.
+
+  Sunday–Wednesday rather than the Monday–Tuesday actually observed, because December has midweek gameweeks and blank/double gameweeks move the settling day. Wednesday is cheap insurance against the weeks that do not look like GW1.
+
+- [ ] **Tighten again once §1 is answered.** A single weekly firing is only safe if a missed window self-heals, which is exactly the `current[]` backfill question GW2 settles. Full-season backfill → roughly `0 12 * * 2` loses nothing. Recent-gameweeks-only → the current schedule is near the floor.
+- [ ] **Time a *scheduled* run** (not a manual trigger — that's a full redeploy: `npm ci` plus the pre-deploy migration, ~5 min, and not representative). A scheduled firing should start the existing image and exit in seconds. Still unmeasured, and the narrowed schedule reduces the exposure without answering it: if a firing takes minutes rather than seconds, 96 runs a week is still far more compute than it looks.
 - [ ] **Reconsider the roster fetch.** Standings are fetched *before* the gate, so a skipped poll costs three FPL calls rather than two. That's deliberate — it keeps `new_entries` fresh pre-season, exactly when the gate always skips. After GW1 that rationale expires, and moving the fetch after the decision drops a third of the traffic.

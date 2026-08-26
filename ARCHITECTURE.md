@@ -44,7 +44,7 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
         |                 retry + backoff)
         |
         v
-[Railway cron]  --every 30-60min-->  poll event-status:
+[Railway cron]  --hourly, Sun-Wed-->  poll event-status:
         |                             bonus_added && leagues == "Updated"
         |                             x-check events[gw].data_checked
         v
@@ -305,7 +305,19 @@ retry is safe.
 
 Deliberately a job route rather than page-render work: it makes one FPL call per manager, which has no business adding latency to the composer or breaking it when the API is flaky.
 
-**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic. Schedule `*/40 * * * *` (UTC); the exact cadence doesn't matter much because most runs are no-ops, but see [GW1-VERIFICATION §7](docs/GW1-VERIFICATION.md) — it was inherited from this document rather than measured.
+**Scheduling.** A Railway cron service runs `npm run job:capture` (`scripts/capture-history.mts`), which POSTs this route with the bearer token — Railway cron runs commands, not URLs, so the script is a shim and holds no logic.
+
+**Schedule `0 * * * 0-3` (UTC)** — hourly, Sunday through Wednesday. 96 runs a week.
+
+It was `*/40 * * * *` until 2026-08-25, described here as "every 40 minutes". **It was not.** A step in the minute field restarts each hour, so `*/40` fires at :00 and :40 only — gaps of 40 minutes, then 20, and **48 runs a day rather than the 36 this document and GW1-VERIFICATION §7 both assumed**. The live logs read `12:40, 13:00, 13:41, 14:00`, which is the tell.
+
+Why hourly is enough: nothing waits on this job inside an hour. The composer and the send gate read the FPL API live and never touch captured history — that data feeds the Phase 4 stats — and a partial capture is picked up by the next poll regardless.
+
+Why Sunday–Wednesday rather than the Monday–Tuesday actually observed: GW1 2026/27 settled Tuesday morning UTC (still provisional at 24 Aug 23:54Z, captured 12:40Z on the 25th), and an ordinary Sat–Sun gameweek should settle Monday. But December carries midweek gameweeks and blank/double gameweeks move the settling day around, so Wednesday is cheap insurance against the weeks that do not look like this one.
+
+**Why not tighter still**, e.g. a single weekly firing: that is only safe if a missed window self-heals, which depends on whether `history.current[]` returns the whole season or only recent gameweeks — [GW1-VERIFICATION §1](docs/GW1-VERIFICATION.md), unanswered until GW2's run, since `gameweeksSeen: [1]` fits both. If it backfills a full season the cadence can drop to roughly `0 12 * * 2` and lose nothing; if it does not, this is near the floor. Revisit with that answer in hand.
+
+Still unmeasured either way: what a scheduled firing actually costs in compute time. §7 has it.
 
 **Cron service configuration**, since it lives in the Railway dashboard rather than the repo. The service is **`cron-capture-history`**: separate from the web app (`fphelp-app`), same GitHub repo, no public domain.
 
@@ -320,7 +332,7 @@ Its configuration:
 
 **Known coupling:** `DATABASE_URL` is a *build-time* requirement for the app, not just a runtime one — the eager pool above plus `DrizzleAdapter(db, …)` at module scope in `src/auth.ts`. It doesn't affect the web service, which has the variable, but it will break any CI build or fresh environment without a database attached. Making it genuinely lazy needs the NextAuth setup restructured; a `Proxy` over `db` alone is not enough, because the adapter inspects the object on import.
 
-**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~150 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
+**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~95 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
 
 Completeness is measured as *distinct entries stored for that gameweek* against the roster size, not a "captured" flag. A run that lost two managers to a flaky API is therefore retried by the next poll automatically. A departed manager keeps their rows, so the comparison is `>=` — otherwise a shrinking roster would stall the poll into re-capturing forever.
 
@@ -355,6 +367,42 @@ Two reasons this is not a closed question:
 The FPL client should treat a sudden run of `403`s, or an HTML content type where JSON is expected, as *the block has started* rather than as a transient error — and surface it loudly instead of retrying into a wall.
 
 This still drives hosting: serverless platforms with rotating shared egress IPs are a poor fit, so the app runs as a **persistent Railway container** with a stable egress IP. If Railway's IPs are blocked, the mitigation is an **egress proxy**, not a different host — Fly.io and Railway are both datacenter IPs, so a block hits either.
+
+## Monitoring
+
+**What is worth monitoring here is not what is usually worth monitoring.** One owner opens this app roughly once a week to write a digest; if it is down on a Thursday afternoon, nobody — including the owner — finds out or cares. Uptime is close to a non-question. The failures that matter are silent, server-side, and would otherwise surface weeks later:
+
+| Failure | Caught by |
+| --- | --- |
+| Cloudflare starts blocking Railway's egress (`FplBlockedError`) | Sentry, via `onRequestError` or the cron's `captureException` |
+| A digest half-sends through Resend | Sentry (the Server Action throws) |
+| A database error inside `/setup` or `/send` | Sentry, via `onRequestError` |
+| **The cron silently stops firing** | Sentry Crons check-in |
+| FPL changes an endpoint's shape | `recorded.test.ts`, not monitoring — it fails `npm test` |
+
+**Sentry is optional by construction.** With no `SENTRY_DSN` the SDK never initialises and every call is a no-op, so a fresh clone, `npm test` and the Playwright suite need no configuration and send nothing. `next.config.ts` only applies `withSentryConfig` when `SENTRY_AUTH_TOKEN` is set, so a build without credentials is unaffected. A monitoring tool that can break the build or the boot has made things worse, not better.
+
+Node only: there is no middleware, no route opts into the edge runtime, and **no client SDK is installed**, so the browser bundle is unchanged and there is no public DSN to manage. Add `sentry.edge.config.ts` / `instrumentation-client.ts` if that changes.
+
+`tracesSampleRate` is `0` and `sendDefaultPii` is `false`. Traces are what consume a free-tier quota and there is no latency question worth sampling at this volume; PII is off because a Server Action payload can carry the digest text and the league's recipient addresses, which have no business in a third-party error tracker for members who never signed up to anything.
+
+**Cron check-ins, and why the monitor's schedule lives in the repo.** `scripts/capture-history.mts` opens a check-in before the POST and closes it `ok` or `error` after, upserting the monitor's config as it goes — including the crontab `0 * * * 0-3`. That last part is what makes the narrowed schedule safe: a fixed-interval heartbeat ("expect a ping hourly") would alarm every Thursday through Saturday, when the job deliberately does not run. Giving Sentry the same cron expression means it expects the silence. **If the Railway schedule changes, change `monitorConfig` too** — a monitor that disagrees with reality trains you to ignore it.
+
+A skipped poll checks in as `ok`, deliberately. Roughly 95 of every 96 weekly runs are skips; reporting those as failures would be an alert that cries wolf, which is worse than no alert.
+
+**Configuration.** Only two variables, both set in Railway and required only in production:
+
+| Variable | `fphelp-app` | `cron-capture-history` | Purpose |
+| --- | --- | --- | --- |
+| `SENTRY_DSN` | ✅ | ✅ | Turns the SDK on. The cron needs its own copy or check-ins never happen |
+| `SENTRY_ENVIRONMENT` | ✅ | ✅ | `production`. Falls back to `NODE_ENV`, which is right on Railway but implicit |
+| `SENTRY_AUTH_TOKEN` | ✅ | — | Source-map upload only. The cron runs no build |
+
+The org (`theapps`) and project (`fphelp`) are **literals in `next.config.ts`**, not environment variables. Neither is a secret — both appear in every Sentry URL — and hardcoding them means the file says where errors go rather than that answer living in a dashboard. The token is the only real credential, and it is the only thing left in the environment. Note the DSN is deliberately **not** `NEXT_PUBLIC_SENTRY_DSN`: that prefix exists to inline a DSN into the browser bundle, and there is no client SDK here.
+
+A bad or missing auth token degrades to unreadable stack traces; it does not fail the deploy — verified locally against a bogus token. The same is true of a stale project slug, which is the failure to watch for if the project is ever renamed in Sentry: the DSN keeps working, because it is keyed on the numeric project ID, so source maps stop uploading in silence.
+
+**What is deliberately not here.** UptimeRobot answers a question this app does not have, though it costs nothing to keep. Postgres triggers with `LISTEN`/`NOTIFY` to alert on row inserts were considered and rejected: they need a persistent listener, which is another always-on service that can itself die silently. The app already knows when it writes a `messages` or `deliveries` row, and has context the row does not — so notifications belong on the write path, not in the database.
 
 ## Testing strategy
 
