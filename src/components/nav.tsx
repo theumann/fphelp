@@ -8,9 +8,9 @@ import { signOutAction } from '@/app/auth-actions'
 import { Logo } from '@/components/logo'
 
 const LINKS = [
-  { href: '/send', label: 'Compose' },
-  { href: '/dues', label: 'Dues' },
-  { href: '/setup', label: 'Setup' },
+  { suffix: '/send', label: 'Compose' },
+  { suffix: '/dues', label: 'Dues' },
+  { suffix: '/setup', label: 'Setup' },
 ]
 
 function SignOutButton() {
@@ -28,18 +28,24 @@ function SignOutButton() {
 }
 
 /**
- * `who` is the signed-in owner's email, resolved in the layout and passed down — this
- * is a client component for `usePathname`, so it cannot read the session itself.
+ * `who` is the signed-in owner's email, and `prefix` is the league the links belong to.
  *
  * Showing who is signed in is not decoration. Co-owners may share a device, and the
  * digest is signed by whoever sends it, so "which owner am I right now" changes the
  * output of the app rather than just the greeting.
+ *
+ * **`prefix` is given, never derived.** It was briefly read out of `usePathname`, which
+ * is wrong in the one case that matters: on a 404 the path still contains a league
+ * segment, so the bar cheerfully offered three links into a league that does not exist,
+ * each of which 404s in turn. The pathname says what was *asked for*; only the server
+ * knows whether it resolved. So the league layout passes this down after checking, and
+ * `null` means "no league here" — on `/`, and on any 404 or refusal, where the bar
+ * reduces to the mark and Sign out.
+ *
+ * Still a client component, for `aria-current` on the active link.
  */
-export function Nav({ who }: { who?: string | null }) {
+export function Nav({ who, prefix = null }: { who?: string | null; prefix?: string | null }) {
   const pathname = usePathname()
-
-  // Hidden on the sign-in page and the landing page, where there is nowhere to go yet.
-  if (pathname === '/signin' || pathname === '/') return null
 
   return (
     <nav className="border-b border-line bg-surface">
@@ -58,26 +64,35 @@ export function Nav({ who }: { who?: string | null }) {
        */}
       <div className="mx-auto flex w-full max-w-xl items-center gap-1 p-2">
         <div className="flex items-center gap-1">
-          {LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={pathname === href ? 'page' : undefined}
-              className={`rounded-lg px-2.5 py-2 text-sm transition-colors sm:px-3 ${
-                pathname === href
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted hover:bg-surface-muted hover:text-foreground'
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          {prefix
+            ? LINKS.map(({ suffix, label }) => {
+                const href = `${prefix}${suffix}`
+                return (
+                  <Link
+                    key={suffix}
+                    href={href}
+                    aria-current={pathname === href ? 'page' : undefined}
+                    className={`rounded-lg px-2.5 py-2 text-sm transition-colors sm:px-3 ${
+                      pathname === href
+                        ? 'bg-accent font-medium text-accent-foreground'
+                        : 'text-muted hover:bg-surface-muted hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </Link>
+                )
+              })
+            : null}
         </div>
 
         {/* `min-w-0` lets this column give way before the links do when space runs out;
             `shrink-0` on the mark keeps it from being squeezed narrower than itself. */}
         <div className="flex min-w-0 flex-1 justify-center">
-          <Link href="/send" className="shrink-0 px-1" aria-label="FPheLp">
+          {/* The mark goes to `/`, which is the league chooser — the only way back to it
+              from inside a league, and the only navigation an owner with several leagues
+              has. For an owner with one, `/` redirects to their composer, so this is
+              still "home" in the sense it always was. */}
+          <Link href="/" className="shrink-0 px-1" aria-label="FPheLp">
             {/* `h-auto` is required with the CSS width override, or next/image keeps the
                 intrinsic height attribute and the mark is squashed. */}
             <Logo width={68} className="h-auto w-14 sm:w-[68px]" />

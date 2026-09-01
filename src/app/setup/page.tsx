@@ -1,30 +1,12 @@
 import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
-import { DefaultBlocks } from '@/components/default-blocks'
-import { NotAnOwner } from '@/components/not-an-owner'
-import { OwnersList } from '@/components/owners-list'
-import { RecipientsList } from '@/components/recipients-list'
-import { SetupForm } from '@/components/setup-form'
-import { SetupTabs } from '@/components/setup-tabs'
-import { Page, PageHeader } from '@/components/ui'
-import { YourTeam } from '@/components/your-team'
-import {
-  ensureLeague,
-  findMembership,
-  getSettings,
-  isFinalised,
-  listOwners,
-  listRecipients,
-} from '@/db/queries'
-import { fpl } from '@/lib/fpl/client'
-import { gameweekCount } from '@/lib/fpl/gameweek'
-import { buildRoster } from '@/lib/fpl/roster'
-import { REFERENCE_LEAGUE } from '@/lib/league-config'
+import { resolveLanding } from '@/lib/league-access'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SetupPage({
+/** Forwards to `/l/<fplLeagueId>/setup`. See `src/app/send/page.tsx` for why these stay. */
+export default async function LegacySetupPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string }>
@@ -34,101 +16,8 @@ export default async function SetupPage({
   const session = await auth()
   if (!session?.user?.id) redirect('/signin')
 
-  const [standings, bootstrap] = await Promise.all([
-    fpl.leagueStandingsAll(REFERENCE_LEAGUE.fplLeagueId),
-    fpl.bootstrapStatic(),
-  ])
-
-  const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
-  const membership = await findMembership(league.id, session.user.id)
-  if (!membership) return <NotAnOwner />
-
-  const roster = buildRoster(standings)
-  const [settings, owners, recipientList, finalised] = await Promise.all([
-    getSettings(league.id),
-    listOwners(league.id),
-    listRecipients(league.id),
-    isFinalised(league.id),
-  ])
-
-  return (
-    <main>
-      <Page>
-        <PageHeader
-          title="League setup"
-          subtitle={
-            <>
-              {standings.league.name} · FPL league {league.fplLeagueId} · {roster.length}{' '}
-              managers · {gameweekCount(bootstrap)} gameweeks
-            </>
-          }
-        />
-
-        {/*
-          Three panels, split by how the settings save rather than by what they are
-          about: money batches behind a Save button, messages and people write on click.
-          Communication leads because it is the weekly one — the pot and the prize rules
-          are set once and then rarely touched.
-          "Your team" sits with people because it is the one setting here that belongs to
-          the signed-in owner rather than to the league — co-owners each set their own.
-        */}
-        <SetupTabs
-          initial={tab}
-          tabs={[
-            {
-              id: 'messages',
-              label: 'Communication',
-              panel: (
-                <>
-                  <DefaultBlocks leagueId={league.id} initial={league.defaultBlocks} />
-                  <RecipientsList
-                    leagueId={league.id}
-                    initialRecipients={recipientList}
-                    initialEmailEnabled={league.emailEnabled}
-                    initialHideRecipients={league.hideRecipients}
-                    managerCount={roster.length}
-                  />
-                </>
-              ),
-            },
-            {
-              id: 'money',
-              label: 'Pot & prizes',
-              panel: (
-                <SetupForm
-                  leagueId={league.id}
-                  initial={settings}
-                  gameweekCount={gameweekCount(bootstrap)}
-                  managerCount={roster.length}
-                  finalised={finalised}
-                />
-              ),
-            },
-            {
-              id: 'people',
-              label: 'People',
-              panel: (
-                <>
-                  <OwnersList
-                    leagueId={league.id}
-                    owners={owners}
-                    currentUserId={session.user.id}
-                  />
-                  <YourTeam
-                    leagueId={league.id}
-                    managers={roster.map((m) => ({
-                      entry: m.entry,
-                      entryName: m.entryName,
-                      playerName: m.playerName,
-                    }))}
-                    initial={membership.managerEntry}
-                  />
-                </>
-              ),
-            },
-          ]}
-        />
-      </Page>
-    </main>
-  )
+  // `?tab=` is carried across: `/setup?tab=money` is the shape used in links and in the
+  // e2e suite, and dropping it would forward to the wrong panel rather than fail visibly.
+  const suffix = tab ? `/setup?tab=${encodeURIComponent(tab)}` : '/setup'
+  redirect(await resolveLanding(session.user.id, suffix))
 }

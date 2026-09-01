@@ -1,13 +1,16 @@
 /**
- * Phase 0: which FPL league this deployment serves.
+ * Which FPL league a request is about.
  *
- * Everything else — pot, prize rules, the owner's own team — is configured through
- * /setup and stored in the database. The league itself is deployment-level rather than
- * a setting because there is still no flow for creating a league, only for configuring
- * the one that exists.
+ * The **web app no longer reads this**. Pages take the league from the URL
+ * (`/l/<fplLeagueId>/…`) and resolve it against `leagues` rows the user is a member of,
+ * so one deployment serves as many leagues as have been created — see
+ * docs/MULTI-LEAGUE.md phase A.
  *
- * `FPL_LEAGUE_ID` overrides the default so a second deployment (staging, a friend's
- * league) needs a variable rather than a recompile.
+ * What still uses `REFERENCE_LEAGUE` is the capture cron and the operational scripts,
+ * which have no URL to take a league from. Making the cron cover every league is phase B;
+ * until then it captures this one, and a second league created for testing is *not*
+ * captured. That is deliberate for a throwaway league and wrong for a real one, which is
+ * why phase B must land before anyone else is invited.
  */
 
 /** The reference league, used when nothing is configured. */
@@ -37,6 +40,24 @@ export function parseLeagueId(raw: string | undefined): number {
   }
 
   return id
+}
+
+/**
+ * Parses an FPL league ID out of a URL segment, or returns null.
+ *
+ * Separate from `parseLeagueId` because the two failure modes are different. A bad
+ * `FPL_LEAGUE_ID` is a misconfigured deployment and should stop it starting; a bad URL
+ * segment is a stranger typing in the address bar and should be a 404, not a 500.
+ *
+ * Stricter than `Number()` on purpose: that accepts `" 9999999 "`, `0x98967f`, `1e5` and
+ * `Infinity`, each of which would then be looked up as a perfectly ordinary league ID
+ * and produce a 404 anyway — but only after a database round trip, and with two URLs
+ * naming the same league.
+ */
+export function parseLeagueSegment(raw: string): number | null {
+  if (!/^[1-9][0-9]*$/.test(raw)) return null
+  const id = Number(raw)
+  return Number.isSafeInteger(id) ? id : null
 }
 
 export const REFERENCE_LEAGUE = {

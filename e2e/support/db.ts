@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { Pool } from 'pg'
 
-import { FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME } from '../../src/lib/fpl/fixtures'
+import { FIXTURE_LEAGUE_ID, fixtureLeagueName } from '../../src/lib/fpl/fixtures'
 
 import { checkE2eDatabaseUrl } from './db-url'
 
@@ -75,20 +75,36 @@ export async function seedLeague(
     recipients?: string[]
     /** Defaults to the column default (hidden), matching a league that never chose. */
     hideRecipients?: boolean
+    /**
+     * A second league for the same owner, for the chooser and isolation cases. Defaults
+     * to the fixture league; `fixtureLeagueName` decides what the fake API calls it.
+     */
+    fplLeagueId?: number
+    /** Reuses an existing owner instead of creating one, which is what makes them co-exist. */
+    ownerId?: string
   } = {},
 ): Promise<SeededLeague> {
   const email = opts.email ?? OWNER_EMAIL
 
-  const { rows: users } = await p.query<{ id: string }>(
-    `INSERT INTO users (email, name, email_verified) VALUES ($1, $2, now()) RETURNING id`,
-    [email, opts.name ?? 'Test Owner'],
-  )
-  const ownerId = users[0].id
+  let ownerId = opts.ownerId
+  if (!ownerId) {
+    const { rows: users } = await p.query<{ id: string }>(
+      `INSERT INTO users (email, name, email_verified) VALUES ($1, $2, now()) RETURNING id`,
+      [email, opts.name ?? 'Test Owner'],
+    )
+    ownerId = users[0].id
+  }
 
+  const fplLeagueId = opts.fplLeagueId ?? FIXTURE_LEAGUE_ID
   const { rows: leagues } = await p.query<{ id: string }>(
     `INSERT INTO leagues (fpl_league_id, name, email_enabled, hide_recipients)
        VALUES ($1, $2, $3, $4) RETURNING id`,
-    [FIXTURE_LEAGUE_ID, FIXTURE_LEAGUE_NAME, opts.emailEnabled ?? false, opts.hideRecipients ?? true],
+    [
+      fplLeagueId,
+      fixtureLeagueName(fplLeagueId),
+      opts.emailEnabled ?? false,
+      opts.hideRecipients ?? true,
+    ],
   )
   const leagueId = leagues[0].id
 

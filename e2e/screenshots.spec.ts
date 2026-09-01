@@ -1,4 +1,4 @@
-import { test } from './support/test'
+import { leagueUrl, test } from './support/test'
 
 /**
  * Screenshots, for looking at rather than asserting on.
@@ -80,7 +80,7 @@ test.describe('nav', () => {
   ] as const) {
     test(name, async ({ ownerPage }) => {
       await ownerPage.setViewportSize({ width, height: 700 })
-      await ownerPage.goto('/setup')
+      await ownerPage.goto(leagueUrl('/setup'))
       await ownerPage.locator('nav').screenshot({ path: `${SHOTS}/nav-${name}.png` })
     })
   }

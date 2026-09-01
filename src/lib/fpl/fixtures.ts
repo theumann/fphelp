@@ -37,6 +37,19 @@ export const FIXTURE_LEAGUE_ID = 9999999
 export const FIXTURE_LEAGUE_NAME = "The Sunday League"
 
 /**
+ * What this fake API calls a league.
+ *
+ * Every league ID gets the same 18 managers — the roster is what the fixture is for, and
+ * duplicating it per league would buy nothing — but the *envelope* has to answer for the ID
+ * it was asked about. Two leagues that both come back named "The Sunday League" would make
+ * the chooser at `/` a list of identical rows, and `syncLeagueName` would rename the second
+ * league to the first's name, hiding a mix-up rather than revealing one.
+ */
+export function fixtureLeagueName(leagueId: number): string {
+  return leagueId === FIXTURE_LEAGUE_ID ? FIXTURE_LEAGUE_NAME : `Test league ${leagueId}`
+}
+
+/**
  * 18 managers, matching the reference league — 17 with scores and one joiner who has
  * none yet.
  *
@@ -87,13 +100,14 @@ const JOINERS: NewLeagueEntry[] = [
 ]
 
 /** One page of the standings response. Both collections paginate, independently. */
-function standingsPage(page: number): ClassicLeagueStandings {
+function standingsPage(page: number, leagueId: number): ClassicLeagueStandings {
   const start = (page - 1) * FIXTURE_PAGE_SIZE
   const scored = SCORED.slice(start, start + FIXTURE_PAGE_SIZE)
   const joiners = JOINERS.slice(start, start + FIXTURE_PAGE_SIZE)
 
   return {
     ...LEAGUE_ENVELOPE,
+    league: { ...LEAGUE_ENVELOPE.league, id: leagueId, name: fixtureLeagueName(leagueId) },
     standings: {
       has_next: start + FIXTURE_PAGE_SIZE < SCORED.length,
       page,
@@ -204,9 +218,12 @@ export const fixtureFetch: typeof fetch = async (input) => {
   if (path.startsWith('/event-status/')) return json(EVENT_STATUS)
   if (/^\/entry\/\d+\/history\//.test(path)) return json(HISTORY)
 
-  if (/^\/leagues-classic\/\d+\/standings\//.test(path)) {
+  const league = /^\/leagues-classic\/(\d+)\/standings\//.exec(path)
+  if (league) {
     const page = Number(new URL(url).searchParams.get('page_standings') ?? '1')
-    return json(standingsPage(Number.isInteger(page) && page > 0 ? page : 1))
+    return json(
+      standingsPage(Number.isInteger(page) && page > 0 ? page : 1, Number(league[1])),
+    )
   }
 
   return new Response(JSON.stringify({ error: `No fixture for ${path}` }), {
