@@ -19,7 +19,33 @@ export const metadata: Metadata = {
   description: "Fantasy league updates for the owner to send",
   // `icon.png` and `apple-icon.png` in this directory are picked up by convention.
   applicationName: "FPheLp",
-  appleWebApp: { capable: true, title: "FPheLp", statusBarStyle: "default" },
+  /**
+   * iOS is explicitly opted OUT of standalone launch, and this used to be `capable: true`.
+   *
+   * `apple-mobile-web-app-capable: yes` makes iOS launch a home-screen icon as an
+   * installed web app, which gets cookie storage separate from Safari's. Auth here is a
+   * magic link that opens in Mail and therefore in Safari, so the session would land in
+   * the browser while the installed app stayed signed out — unrecoverably, since asking
+   * for a new link from inside it just opens Safari again.
+   *
+   * The manifest sets `display: 'standalone'` for **Android**, where an installed WebAPK
+   * shares Chrome's cookies and none of the above applies. This tag is what keeps that
+   * from reaching iPhones: newer iOS reads the manifest's `display`, so relying on the
+   * absence of this tag is not enough — it is set to `no` deliberately, not omitted.
+   *
+   * **Both halves are required.** Remove this and iPhones inherit the trap; remove the
+   * manifest's `standalone` and Android loses the install prompt for no reason.
+   *
+   * Anyone who added the icon to their home screen before this keeps the old behaviour
+   * until they remove and re-add it.
+   *
+   * Written through `other` rather than `appleWebApp: { capable: false }` because that
+   * option **omits** the tag instead of emitting `no` — verified against the rendered
+   * HTML, which carried only `apple-mobile-web-app-status-bar-style`. Omission is not an
+   * opt-out once the manifest asks for standalone, so the value has to be stated.
+   */
+  appleWebApp: false,
+  other: { "apple-mobile-web-app-capable": "no" },
 };
 
 /**
