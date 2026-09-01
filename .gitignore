@@ -52,6 +52,7 @@ next-env.d.ts
 # Claude Code local settings
 .claude/settings.local.json
 /.next-e2e/
+.claude/
 
 # Playwright screenshot output (npm run e2e:screens)
 /screenshots/
