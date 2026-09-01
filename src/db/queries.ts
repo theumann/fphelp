@@ -39,6 +39,60 @@ export async function ensureLeague(fplLeagueId: number, name: string) {
 }
 
 /**
+ * The league a URL segment names, or null.
+ *
+ * Deliberately not `ensureLeague`. Every page used to create the league row as a side
+ * effect of being loaded, which was harmless while the ID came from the environment and
+ * meant exactly one league could ever exist. With the ID coming from the URL it would
+ * mean anyone could mint a league row by typing a number into the address bar, so
+ * resolution is read-only and an unknown ID is a 404.
+ */
+export async function findLeagueByFplId(fplLeagueId: number) {
+  return (
+    (await db.query.leagues.findFirst({ where: eq(leagues.fplLeagueId, fplLeagueId) })) ?? null
+  )
+}
+
+/**
+ * Keeps `leagues.name` in step with what FPL currently calls the league.
+ *
+ * `ensureLeague` used to set the name as a side effect of every page load, and that went
+ * with it when league resolution became read-only. Something still has to write it: the
+ * name is what the chooser at `/` lists, a league created by `add-owner.mts` starts as the
+ * placeholder "FPL league", and owners do rename leagues mid-season.
+ *
+ * A no-op unless the name actually changed, so the common case is a read the page had
+ * already done and no write at all.
+ */
+export async function syncLeagueName(leagueId: string, name: string, current: string) {
+  if (name === current || name.trim() === '') return
+  await db.update(leagues).set({ name }).where(eq(leagues.id, leagueId))
+}
+
+export interface LeagueSummary {
+  id: string
+  fplLeagueId: number
+  name: string
+}
+
+/**
+ * Every league this user administers, oldest membership first.
+ *
+ * Drives the chooser at `/` and the redirect for the common case of owning exactly one.
+ * Ordered by when they were made an owner, so the league they have had longest leads —
+ * with a real league and a throwaway test one, that is the order that puts the real one
+ * on top.
+ */
+export async function listLeaguesForUser(userId: string): Promise<LeagueSummary[]> {
+  return db
+    .select({ id: leagues.id, fplLeagueId: leagues.fplLeagueId, name: leagues.name })
+    .from(leagueUsers)
+    .innerJoin(leagues, eq(leagues.id, leagueUsers.leagueId))
+    .where(eq(leagueUsers.userId, userId))
+    .orderBy(leagueUsers.createdAt)
+}
+
+/**
  * Records who is in the league right now.
  *
  * This is the only record of league membership at a point in time. The FPL API only

@@ -52,6 +52,9 @@ parts are elsewhere.
 
 ### A. Resolve the league from membership, not from the environment
 
+**Done 2026-08-31.** Shipped as described below; what follows the horizontal rule records
+what was actually built and the two decisions taken along the way.
+
 Removes `REFERENCE_LEAGUE` from the five call sites. No auth changes, no new users.
 
 **Recommended: a URL segment** — `/l/[leagueId]/send` rather than a "current league" held
@@ -70,6 +73,55 @@ strangers involved.
 
 Also needs: something at `/` for a signed-in user with several leagues — a chooser — and a
 sensible answer for a user with exactly one, who should probably not see a chooser at all.
+
+---
+
+#### What shipped
+
+The URL carries the **FPL numeric league ID**, not the internal UUID: `/l/9999999/send`. It
+is the number the owner already knows from their own league URL and the one Setup prints,
+so a shared link can be told apart from another league's by looking at it. `fpl_league_id`
+is `notNull().unique()`, so it is a legitimate key; the cost is one lookup per page, which
+those pages were already doing.
+
+- `src/lib/league-access.ts` is the single place a league URL is interpreted —
+  `requireLeagueAccess` for the three pages, `leaguePath` for links, `resolveLanding` for
+  the redirects.
+- **`ensureLeague` is gone from the page path.** This is the one change here that is a
+  guard rather than plumbing. Every page used to create the league row as a side effect of
+  being loaded, which was safe only because the ID came from the environment; from a URL
+  segment it would let anyone mint a league by typing a number. Resolution is now
+  read-only and an unknown ID is a 404. `e2e/leagues.spec.ts` asserts the row count.
+- **`?demo=1` no longer skips the membership check.** It used to, because the check lived
+  inside `if (!demo)` with everything that touches the database.
+- `/send`, `/setup`, `/dues` are kept as **redirects** for an owner with one league — they
+  are in bookmarks and in the home screen icon's history. `/setup?tab=` is carried across.
+- `/` is the chooser: one league redirects through to its composer, several list, none says
+  who to ask. The nav renders on `/` when signed in — an owner with no leagues stays there
+  rather than passing through, and without the bar there is no way to sign out.
+- **The nav moved out of the root layout**, which is the one piece of restructuring here.
+  It had been working its links out of `usePathname`, and that is wrong on a 404: the path
+  still contains a league segment, so a nonexistent league got a bar offering three links
+  that each 404 in turn. The pathname says what was asked for; only the server knows
+  whether it resolved. So `l/[leagueId]/layout.tsx` renders the nav *below* the resolution
+  and passes the prefix down, `/` renders the reduced bar itself, and `not-found.tsx` sits
+  at the app root — outside the league layout — so a bad ID falls out of the league chrome
+  rather than being handed a flag to hide it. A `not-found.tsx` under `l/[leagueId]/` would
+  reintroduce the bug, since it renders inside that layout.
+- **`leagues.name` needed a new writer.** `ensureLeague` had been keeping it current as a
+  side effect; `syncLeagueName` now does it explicitly, on the three pages that fetch
+  standings anyway, and only when the name has actually changed. Without it the chooser
+  would list the placeholder `add-owner.mts` inserts, forever.
+- `add-owner.mts` takes `--league <fplLeagueId>`, validated with the same parser the URL
+  uses. **This is how a second league comes into existence** — there is no create-league UI
+  until phase C, so the production test league is created here or not at all.
+- The fixture API now echoes the league ID it was asked about (`fixtureLeagueName`), which
+  is one of the bites listed below, resolved.
+
+Still `REFERENCE_LEAGUE`, deliberately: the capture cron and the operational scripts. They
+have no URL to take a league from, and making the cron cover every league is phase B.
+**A league created for testing is therefore not captured** — right for a throwaway, wrong
+for a real one, which is the same reason phase B must land before anyone is invited.
 
 ### B. Make the cron handle every league
 
@@ -194,12 +246,14 @@ there is evidence anyone wants self-signup.
   Resend.
 - **`hide_recipients` (cc/bcc) is per-league already** — good — but the "cannot be batched
   above 50" rule now applies per league rather than once.
-- **The e2e suite truncates every table and refuses any database not named `fphelp_e2e`.**
-  Multi-league fixtures will need more than one league, and `FPL_FIXTURES` currently answers
-  for a single league ID.
-- **`src/lib/fpl/fixtures.ts` hardcodes `FIXTURE_LEAGUE_ID = 9999999`**, and
-  `recorded/*.json` is one real league's payloads. Recorded fixtures stay single-league;
-  that is fine, but the fixture *fetch* needs to answer for more than one ID.
+- ~~**The e2e suite … `FPL_FIXTURES` currently answers for a single league ID.**~~
+  **Done in phase A.** `seedLeague` takes `fplLeagueId` and can reuse an owner, and the
+  fixture fetch echoes the ID it was asked about rather than always answering as the
+  reference league. That last part matters more than it sounds: two leagues both returning
+  "The Sunday League" would make the chooser a list of identical rows, and `syncLeagueName`
+  would rename the second to the first — hiding a mix-up instead of revealing one.
+  The roster is still shared across every league ID, which is fine; it is what the fixture
+  is for. Recorded fixtures stay single-league.
 - **`role` grants nothing today.** Multi-league with strangers is the point at which
   "every owner can do everything, including send" stops being obviously safe.
 - **Operational scripts assume the reference league.** They can take an argument, but

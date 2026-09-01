@@ -1,5 +1,5 @@
 import { addOwnerRow, listOwnerEmails, seedStranger } from './support/db'
-import { expect, test, useSession } from './support/test'
+import { expect, leagueUrl, test, useSession } from './support/test'
 
 /**
  * The Setup page.
@@ -10,7 +10,7 @@ import { expect, test, useSession } from './support/test'
  */
 
 test('a signed-out visitor is sent to sign in', async ({ page }) => {
-  await page.goto('/setup')
+  await page.goto(leagueUrl('/setup'))
   await expect(page).toHaveURL(/\/signin/)
 })
 
@@ -18,7 +18,7 @@ test('a signed-in stranger is refused, not enrolled', async ({ page, db, league 
   const stranger = await seedStranger(db)
   await useSession(page, stranger.sessionToken)
 
-  await page.goto('/setup')
+  await page.goto(leagueUrl('/setup'))
   await expect(page.getByRole('heading', { name: /don't have access/i })).toBeVisible()
 
   // The regression this guards: visiting the page used to create the membership.
@@ -28,7 +28,7 @@ test('a signed-in stranger is refused, not enrolled', async ({ page, db, league 
 test('an owner sees the whole roster, across both collections and both pages', async ({
   ownerPage,
 }) => {
-  await ownerPage.goto('/setup')
+  await ownerPage.goto(leagueUrl('/setup'))
 
   await expect(ownerPage.getByRole('heading', { name: 'League setup' })).toBeVisible()
 
@@ -53,7 +53,7 @@ test.describe('the save bar', () => {
   // Communication leads now, so the money panel is reached by name rather than by
   // being what /setup happens to open on.
   test.beforeEach(async ({ ownerPage }) => {
-    await ownerPage.goto('/setup?tab=money')
+    await ownerPage.goto(leagueUrl('/setup?tab=money'))
   })
 
   test('reports clean, then dirty, then saves', async ({ ownerPage }) => {
@@ -89,7 +89,7 @@ test.describe('the save bar', () => {
  */
 test.describe('league expenses', () => {
   test.beforeEach(async ({ ownerPage }) => {
-    await ownerPage.goto('/setup?tab=money')
+    await ownerPage.goto(leagueUrl('/setup?tab=money'))
   })
 
   test('a cost is saved, comes back, and comes off the remainder', async ({ ownerPage }) => {
@@ -135,7 +135,7 @@ test.describe('league expenses', () => {
 
 test.describe('owners', () => {
   test.beforeEach(async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
+    await ownerPage.goto(leagueUrl('/setup'))
     await ownerPage.getByRole('tab', { name: 'People' }).click()
   })
 
@@ -204,7 +204,7 @@ test.describe('owners', () => {
 
 test.describe('email recipients', () => {
   test.beforeEach(async ({ ownerPage }) => {
-    await ownerPage.goto('/setup')
+    await ownerPage.goto(leagueUrl('/setup'))
     await ownerPage.getByRole('tab', { name: 'Communication' }).click()
   })
 
@@ -235,7 +235,7 @@ test.describe('reply model', () => {
   test('hiding is on until the owner turns it off, and says what changes', async ({
     ownerPage,
   }) => {
-    await ownerPage.goto('/setup?tab=messages')
+    await ownerPage.goto(leagueUrl('/setup?tab=messages'))
     await ownerPage.getByRole('checkbox', { name: /digest by email/ }).check()
 
     const hide = ownerPage.getByRole('checkbox', { name: /Hide recipients/ })

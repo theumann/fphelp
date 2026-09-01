@@ -39,5 +39,7 @@ await db
   .values({ leagueId: league.id, userId: user.id })
   .onConflictDoNothing()
 
-console.log(`[bootstrap] owner ${email} present on league ${league.fplLeagueId}`)
+console.log(
+  `[bootstrap] owner ${email} present on league ${league.fplLeagueId} — /l/${league.fplLeagueId}/send`,
+)
 process.exit(0)

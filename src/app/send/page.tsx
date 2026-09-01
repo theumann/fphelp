@@ -1,183 +1,24 @@
 import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
-import { Composer } from '@/components/composer'
-import { NotAnOwner } from '@/components/not-an-owner'
-import {
-  ensureLeague,
-  findDelivery,
-  findDraft,
-  findMembership,
-  getSettings,
-  listRecipients,
-  ownerSignature,
-  upsertDigest,
-} from '@/db/queries'
-import { demoRoster } from '@/lib/demo'
-import { computeDigestStats } from '@/lib/digest/stats'
-import { FplBlockedError, fpl } from '@/lib/fpl/client'
-import { gameweekCount, sendGate } from '@/lib/fpl/gameweek'
-import { buildRoster } from '@/lib/fpl/roster'
-import { REFERENCE_LEAGUE } from '@/lib/league-config'
-import { DEFAULT_SETTINGS, summarise } from '@/lib/league-settings'
-import type { BlockSelection } from '@/lib/render/blocks'
+import { resolveLanding } from '@/lib/league-access'
 
-// Live FPL data — never serve a cached table as this week's result.
 export const dynamic = 'force-dynamic'
 
-export default async function SendPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ demo?: string }>
-}) {
-  const { demo } = await searchParams
-
+/**
+ * The composer moved to `/l/<fplLeagueId>/send`. This forwards.
+ *
+ * Kept rather than deleted because this path is in bookmarks and in the home screen icon's
+ * history — it was the app's front door for the whole of the single-league era, and the
+ * owner who taps a stale one should land on their draft, not on a 404 that reads as the
+ * app being broken.
+ *
+ * An owner with several leagues cannot be forwarded (there is no way to tell which one they
+ * meant) and gets the chooser at `/`; `resolveLanding` decides. `actions.ts` stays in this
+ * directory — Server Actions are not routes and did not move.
+ */
+export default async function LegacySendPage() {
   const session = await auth()
   if (!session?.user?.id) redirect('/signin')
-
-  let standings
-  let bootstrap
-  let eventStatus
-
-  try {
-    ;[standings, bootstrap, eventStatus] = await Promise.all([
-      fpl.leagueStandingsAll(REFERENCE_LEAGUE.fplLeagueId),
-      fpl.bootstrapStatic(),
-      // Fetched unconditionally so the readiness gate below can never be skipped by
-      // an early return. If this call fails the page fails closed, which is the
-      // intended trade: no digest at all beats a digest built on pre-bonus scores.
-      fpl.eventStatus(),
-    ])
-  } catch (err) {
-    const blocked = err instanceof FplBlockedError
-    return (
-      <main className="mx-auto max-w-xl p-6">
-        <h1 className="text-lg font-semibold">Couldn&apos;t reach the FPL API</h1>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-          {blocked
-            ? 'The API appears to be blocking this host. This is the Cloudflare datacenter-IP risk - see ARCHITECTURE.md; the fix is an egress proxy, not a redeploy.'
-            : 'The request failed. This is usually transient - the FPL API goes down around deadlines.'}
-        </p>
-        <pre className="mt-4 overflow-auto rounded bg-neutral-100 p-3 text-xs dark:bg-neutral-900">
-          {err instanceof Error ? err.message : String(err)}
-        </pre>
-      </main>
-    )
-  }
-
-  // ?demo=1 substitutes a synthetic scored league so the ~1,500 char budget and the
-  // truncation path can be tested before GW1. Remove once the season starts.
-  const roster = demo ? demoRoster(Number(demo) > 1 ? Number(demo) : 18) : buildRoster(standings)
-
-  /**
-   * The readiness gate, decided in `sendGate` so it can be tested — this page cannot be.
-   *
-   * It withholds the generated blocks rather than the whole page. Writing to the group
-   * mid-week is a normal thing for an owner to do and nothing about it is unsafe; what
-   * cannot be undone is attaching a table of provisional scores to it. Blocking the page
-   * outright stopped both, and the one it needed to stop was the second.
-   *
-   * Demo mode is exempt because it is synthetic and exists to test message length.
-   */
-  const gate = sendGate(bootstrap, eventStatus)
-  const statsReady = demo ? true : gate.statsReady
-
-  const gameweek = demo ? 5 : gate.gameweek
-  const stats = computeDigestStats(roster, gameweek)
-
-  /**
-   * Only reached in demo mode, which has no league row to read defaults from. A real
-   * league's defaults come from `leagues.default_blocks` below.
-   */
-  let defaultBlocks: BlockSelection = {
-    overallStandings: true,
-    gwResults: true,
-    prizeStructure: false,
-  }
-
-  // Demo mode persists nothing — it exists to test message length, not to write
-  // synthetic rows into the real league's history.
-  let persistence
-  // Demo mode never gets the email panel: there is no league row to read the opt-in
-  // from, and no recipient list that a synthetic roster could correspond to.
-  let email
-  let signature = `${session.user.name ?? session.user.email} - ${standings.league.name} Admin`
-  // Demo mode has no league, so no pot — `undefined` rather than 0, which would render a
-  // prize block claiming the pot is nothing.
-  let prize = summarise(
-    {
-      ...DEFAULT_SETTINGS,
-      potTotal: undefined,
-      rankPercentages: [...DEFAULT_SETTINGS.rankPercentages],
-    },
-    gameweekCount(bootstrap),
-  )
-
-  if (!demo) {
-    const league = await ensureLeague(REFERENCE_LEAGUE.fplLeagueId, standings.league.name)
-
-    // This page composes and sends to the whole league, so it checks membership like
-    // the others. The Server Actions behind it already call assertOwner — this stops a
-    // non-owner reading the draft, which those cannot.
-    if (!(await findMembership(league.id, session.user.id))) return <NotAnOwner />
-
-    /**
-     * The league's own defaults, which is what a new draft starts from and what both
-     * panels fall back to. Previously hardcoded here, so the column existed, Setup had no
-     * way to change it, and every owner got the same three choices whatever they wanted.
-     */
-    defaultBlocks = league.defaultBlocks
-
-    const digest = await upsertDigest(league.id, gameweek, stats)
-    const draft = await findDraft(league.id, gameweek)
-
-    // Prizes come from the league's saved settings, not a hardcoded config.
-    prize = summarise(await getSettings(league.id), gameweekCount(bootstrap))
-
-    // The signature is per-sender: co-owners have different FPL entries and sign with
-    // their own team, so it is built at render time from the signed-in owner's row and
-    // never baked into the shared digest.
-    signature = await ownerSignature(league.id, session.user.id, standings.league.name, roster)
-
-    // Counted even when the list is empty — the panel says so, rather than hiding and
-    // leaving the owner to wonder why email vanished.
-    const [recipientList, delivered] = await Promise.all([
-      listRecipients(league.id),
-      findDelivery(league.id, gameweek, 'email'),
-    ])
-
-    email = {
-      enabled: league.emailEnabled,
-      recipientCount: recipientList.length,
-      gameweekCount: gameweekCount(bootstrap),
-      hideRecipients: league.hideRecipients,
-      // Only a success counts as sent — a failed attempt delivered nothing.
-      sentAt:
-        delivered?.status === 'sent' ? delivered.updatedAt.toISOString() : undefined,
-    }
-
-    persistence = {
-      leagueId: league.id,
-      digestId: digest.id,
-      messageId: draft?.id,
-      initialBody: draft?.body ?? '',
-      initialBlocks: draft?.blocks ?? defaultBlocks,
-      sentAt: draft?.sentAt?.toISOString(),
-    }
-  }
-
-  return (
-    <main>
-      <Composer
-        statsReady={statsReady}
-        stats={stats}
-        prize={prize}
-        signature={signature}
-        leagueName={standings.league.name}
-        defaultBlocks={defaultBlocks}
-        email={email}
-        persistence={persistence}
-      />
-    </main>
-  )
+  redirect(await resolveLanding(session.user.id, '/send'))
 }

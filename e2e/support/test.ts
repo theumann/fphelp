@@ -1,7 +1,22 @@
 import { test as base, type Page } from '@playwright/test'
 import type { Pool } from 'pg'
 
+import { FIXTURE_LEAGUE_ID } from '../../src/lib/fpl/fixtures'
+
 import { pool, resetDatabase, seedLeague, type SeededLeague } from './db'
+
+/**
+ * A page URL inside the seeded league.
+ *
+ * Pages live under `/l/<fplLeagueId>/…` since leagues moved into the URL, and every league
+ * `seedLeague` creates is the fixture one — so this is the prefix for all of them. Tests
+ * navigate here rather than to the bare `/send`, which still works but is a redirect: it
+ * would make every test a test of the redirect too, and would quietly stop exercising the
+ * refusal path for a signed-in stranger, who has no league to be redirected to.
+ */
+export function leagueUrl(suffix: string): string {
+  return `/l/${FIXTURE_LEAGUE_ID}${suffix}`
+}
 
 /**
  * The suite's own `test`, with a clean database and a signed-in owner.

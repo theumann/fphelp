@@ -1,5 +1,5 @@
 import { seedLeague } from './support/db'
-import { expect, test, useSession } from './support/test'
+import { expect, leagueUrl, test, useSession } from './support/test'
 
 /**
  * The composer's block selection.
@@ -13,7 +13,7 @@ const STANDINGS = { name: /Season standings/ }
 const PRIZES = { name: /Prize structure/ }
 
 test('a block toggle survives leaving the page and coming back', async ({ ownerPage }) => {
-  await ownerPage.goto('/send')
+  await ownerPage.goto(leagueUrl('/send'))
 
   const prizes = ownerPage.getByRole('checkbox', PRIZES)
   await expect(prizes).not.toBeChecked()
@@ -34,13 +34,13 @@ test('a block toggle survives leaving the page and coming back', async ({ ownerP
 test('the league default decides what a new draft starts with', async ({ ownerPage }) => {
   // Standings default on, prizes off — assert the starting point before changing it, so a
   // change in the defaults cannot make this test pass for the wrong reason.
-  await ownerPage.goto('/send')
+  await ownerPage.goto(leagueUrl('/send'))
   await expect(ownerPage.getByRole('checkbox', STANDINGS)).toBeChecked()
   await expect(ownerPage.getByRole('checkbox', PRIZES)).not.toBeChecked()
 
   // The block defaults live on Setup's Communication panel, so the tab is part of
   // reaching them — and `?tab=` survives the reload this test does below.
-  await ownerPage.goto('/setup?tab=messages')
+  await ownerPage.goto(leagueUrl('/setup?tab=messages'))
   const defaults = ownerPage.getByRole('list').filter({ hasText: 'Gameweek results' })
   await defaults.getByRole('checkbox', STANDINGS).uncheck()
   await defaults.getByRole('checkbox', PRIZES).check()
@@ -51,7 +51,7 @@ test('the league default decides what a new draft starts with', async ({ ownerPa
   // A draft already exists for this gameweek by now, and its own selection wins — the
   // default only decides where a *new* one starts. So this asserts the stored default,
   // which is the part Setup owns.
-  await ownerPage.goto('/setup?tab=messages')
+  await ownerPage.goto(leagueUrl('/setup?tab=messages'))
   await expect(defaults.getByRole('checkbox', PRIZES)).toBeChecked()
 })
 
@@ -63,7 +63,7 @@ test('the league default decides what a new draft starts with', async ({ ownerPa
  */
 test.describe('channel tabs', () => {
   test('a WhatsApp-only league sees no tabs at all', async ({ ownerPage }) => {
-    await ownerPage.goto('/send')
+    await ownerPage.goto(leagueUrl('/send'))
 
     await expect(ownerPage.getByRole('tablist')).toHaveCount(0)
     await expect(ownerPage.getByRole('link', { name: 'Send to WhatsApp' })).toBeVisible()
@@ -75,7 +75,7 @@ test.describe('channel tabs', () => {
       recipients: ['steve@example.test', 'victor@example.test'],
     })
     await useSession(page, league.sessionToken)
-    await page.goto('/send')
+    await page.goto(leagueUrl('/send'))
 
     // Email is selected on arrival, and its action names the recipient count — the
     // safeguard against the one irreversible button in the app.
@@ -91,7 +91,7 @@ test.describe('channel tabs', () => {
   test('the send button refuses a league with no addresses', async ({ page, db }) => {
     const league = await seedLeague(db, { emailEnabled: true })
     await useSession(page, league.sessionToken)
-    await page.goto('/send')
+    await page.goto(leagueUrl('/send'))
 
     await expect(page.getByRole('button', { name: 'No recipients yet' })).toBeDisabled()
   })
@@ -99,7 +99,7 @@ test.describe('channel tabs', () => {
   test('the length budget stays visible from the email tab', async ({ page, db }) => {
     const league = await seedLeague(db, { emailEnabled: true, recipients: ['a@example.test'] })
     await useSession(page, league.sessionToken)
-    await page.goto('/send')
+    await page.goto(leagueUrl('/send'))
 
     const whatsappTab = page.getByRole('tab', { name: /WhatsApp/ })
     await expect(whatsappTab).not.toContainText('over the length budget')
@@ -126,7 +126,7 @@ test.describe('reply model on the compose page', () => {
       recipients: ['a@example.test', 'b@example.test'],
     })
     await useSession(page, league.sessionToken)
-    await page.goto('/send')
+    await page.goto(leagueUrl('/send'))
 
     const hide = page.getByRole('checkbox', { name: /Hide recipients/ })
     await expect(hide).toBeChecked()
@@ -141,7 +141,7 @@ test.describe('reply model on the compose page', () => {
       recipients: ['a@example.test', 'b@example.test'],
     })
     await useSession(page, league.sessionToken)
-    await page.goto('/send')
+    await page.goto(leagueUrl('/send'))
 
     await page.getByRole('checkbox', { name: /Hide recipients/ }).uncheck()
     await expect(page.getByText(/reaches all league members/)).toBeVisible()
@@ -151,7 +151,7 @@ test.describe('reply model on the compose page', () => {
     // One value, two views: the change has to be visible in Setup, not just here.
     // Deep-linked to the panel this setting lives on, which is also what the `?tab=`
     // parameter is for.
-    await page.goto('/setup?tab=messages')
+    await page.goto(leagueUrl('/setup?tab=messages'))
     await expect(page.getByRole('checkbox', { name: /Hide recipients/ })).not.toBeChecked()
   })
 })

@@ -1,7 +1,7 @@
 import { devices } from '@playwright/test'
 
 import { seedLeague } from './support/db'
-import { test, useSession } from './support/test'
+import { leagueUrl, test, useSession } from './support/test'
 
 /**
  * The composer at phone size. Run by `npm run e2e:screens`; asserts nothing.
@@ -30,7 +30,7 @@ test('send page', async ({ page, db }) => {
     recipients: ['steve@example.test', 'victor@example.test'],
   })
   await useSession(page, league.sessionToken)
-  await page.goto('/send')
+  await page.goto(leagueUrl('/send'))
   await page.getByRole('textbox', { name: 'Your message' }).fill(
     'Big week, gents. Two points between the top three and Dana finally joins us.',
   )

@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Nav } from "@/components/nav";
-import { auth } from "@/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -63,19 +61,22 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
-  // Read here rather than in Nav, which is a client component for `usePathname`.
-  const session = await auth();
-
+/**
+ * Deliberately renders no nav.
+ *
+ * It used to, and the nav worked out its own links from the pathname — which put a league
+ * bar on pages that had no league, including the 404 for a league that does not exist,
+ * where all three links 404ed in turn. The nav now belongs to whoever can vouch for the
+ * league: `src/app/l/[leagueId]/layout.tsx` for a real one, `/` for the chooser's reduced
+ * bar. Anything else — `/signin`, `not-found` — correctly gets none.
+ */
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
-        <Nav who={session?.user?.email} />
-        {children}
-      </body>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

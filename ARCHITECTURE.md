@@ -60,6 +60,22 @@ Data comes from the FPL API at `fantasy.premierleague.com/api/*`. It is first-pa
 
 Components are layered so the risky parts are isolated: the **FPL client** owns caching, retry and backoff; **digest computation** is pure functions over fetched JSON (hence heavily unit-tested); the **renderer** emits both output formats from one template; **delivery adapters** sit behind one interface so email and WhatsApp differ only at the edge.
 
+### Routes, and where the league comes from
+
+One deployment serves **many leagues**. The owner-facing pages live under a league segment and take the league from the URL:
+
+| Route | Notes |
+| --- | --- |
+| `/l/<fplLeagueId>/send` | the composer. Elsewhere in this document, "`/send`" means this |
+| `/l/<fplLeagueId>/setup` | settings, three tabs |
+| `/l/<fplLeagueId>/dues` | dues |
+| `/` | league chooser; redirects through to the composer for an owner with exactly one |
+| `/send`, `/setup`, `/dues` | kept as redirects, for bookmarks and the home-screen icon |
+
+The segment is the **FPL numeric league ID**, not the internal UUID — it is the number the owner already knows, and `leagues.fpl_league_id` is unique. `requireLeagueAccess` in `src/lib/league-access.ts` is the only place a league URL is interpreted, and it is **read-only**: an unknown ID is a 404, never a new league row. Membership is checked there, so a league you do not own is a refusal rather than a page.
+
+`FPL_LEAGUE_ID` is no longer read by the web app. It survives for the capture cron and the operational scripts, which have no URL to take a league from — so **the cron is still single-league** until MULTI-LEAGUE.md phase B, and any second league accrues no history.
+
 ## Data model
 
 **Naming, because "manager" is overloaded.** FPL calls a league participant a *manager* (the API calls one an `entry`). We also have people who *administer* a league in this app. Those are different populations — an admin may not even play in the league. Throughout the schema and code:
