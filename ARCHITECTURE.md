@@ -357,12 +357,26 @@ Rules, all of them failure modes rather than style:
 
 The FPL API sits behind Cloudflare and rejects many datacenter IPs.
 
+**⚠️ This stopped being hypothetical on 2026-09-01: production lost all FPL access, for something on the order of half a day.** The section below is the record, because the shape of the failure is the useful part.
+
 **✅ Verified reachable from Railway on 2026-08-05.** All four endpoints returned `200` with `application/json` from a deployed container (egress IP `13.56.136.98`, region `us-west2`), via the temporary `/api/egress-check` route. Content type matters here: a Cloudflare block serves an HTML challenge page, so JSON confirms a genuine pass rather than a soft failure.
+
+**❌ Blocked on 2026-09-01, from egress IP `152.55.176.146`.** All four endpoints returned `403` in ~40ms with **zero bytes and no content-type** — an edge rejection, not the HTML challenge page anticipated above and not a timeout. Stable across repeated samples minutes apart, so not a rate limit either.
+
+**✅ Recovered the same day by redeploying**, which brought the container up on `152.55.177.118`; all four endpoints returned `200` with `application/json` within two minutes.
+
+Five things that record is worth keeping for:
+
+- **The two IPs are in the same `/16`, 228 addresses apart.** So Cloudflare is not blocking a Railway range — it is scoring individual addresses in one NAT pool. A redeploy is therefore a **reroll, not a fix**: it worked in two minutes and buys nothing durable, because the next deploy can land back on a bad address with no code change involved.
+- **It began with a redeploy, not with a code change.** The trigger was merging a docs-only PR (`.gitignore` plus two markdown files), which redeployed both services; the app came back on a different egress IP than the one verified in August. Strictly this is inference — the egress IP from the hour before that merge was never captured, so what is *proven* is that the two recorded IPs differ and that the failures start there. It is still the reading to reach for first, because this is the failure mode that looks most like "the last change broke it" and is least related to it. **Suspect the IP before the diff.**
+- **`/api/egress-check` is what made this a ten-minute diagnosis.** It is described in its own header as temporary, to be deleted "once the answer is settled". The answer is not settled and this event is the argument for keeping it: it separates "blocked" from "FPL is down" from "our code broke" in one request, from outside, with no deploy.
+- **The build is green throughout.** Nothing in the build calls FPL, so a total loss of API access is invisible to the deploy and to Railway's health reporting.
+- **Only the cron went red, and the web app was equally dead.** `cron-capture-history` exits non-zero on a failed capture, so it was the alarm — but every page that fetches FPL was showing "Couldn't reach the FPL API" for the whole of it, while the service reported healthy. **A blocked app is currently only detectable through the cron.** If the cron is ever made resilient to this, something else has to notice.
 
 Two reasons this is not a closed question:
 
-- **It is one sample at one moment.** Cloudflare decisions are reputation-based and can change without notice, and Railway's egress IP is shared and not contractually stable. A block could appear mid-season.
-- **The mitigation therefore stays documented**: route FPL calls through an egress proxy with a stable, well-reputed IP. Changing host does not help — Fly.io is datacenter IPs too.
+- **Reputation moves on its own.** Cloudflare decisions are reputation-based and change without notice, and Railway's egress IP is shared, not contractually stable, and now demonstrably re-rolled on deploy. Expect recurrence.
+- **The mitigation therefore stays documented**, and has moved from prudent to owed: route FPL calls through an egress proxy with a stable, well-reputed IP. Changing host does not help — Fly.io is datacenter IPs too.
 
 The FPL client should treat a sudden run of `403`s, or an HTML content type where JSON is expected, as *the block has started* rather than as a transient error — and surface it loudly instead of retrying into a wall.
 

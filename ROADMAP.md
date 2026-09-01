@@ -84,9 +84,11 @@ Each feature is annotated with its data source. "Free" means it needs no call be
 - **History capture starts here** — snapshot `entry/{id}/history` → `current[]` once per GW per manager, even though the stats that use it ship in Phase 4.
   - ✅ **Built** as `POST /api/jobs/capture-history`, guarded by a `JOBS_TOKEN` bearer token. It also upserts `managers`, which is the only record of who was in the league at a given time.
   - It stores **every gameweek `current[]` returns**, not just the latest. That makes a missed run self-healing, and means the backfill question below decides only how much one run recovers — not whether the data is lost.
-  - ✅ **Scheduled** via the `cron-capture-history` Railway service running `npm run job:capture` every 40 minutes. Polls are gated on `captureDecision`, so they cost two FPL calls and skip until a gameweek has finished *and* settled; a partial capture is retried by the next poll.
+  - ✅ **Scheduled** via the `cron-capture-history` Railway service running `npm run job:capture` **hourly, Sunday through Wednesday** (`0 * * * 0-3` UTC). Polls are gated on `captureDecision`, so they cost two FPL calls and skip until a gameweek has finished *and* settled; a partial capture is retried by the next poll. This line said "every 40 minutes" until 2026-09-01, describing a `*/40` schedule that was replaced on 2026-08-25 — and that never meant what it said in the first place. See ARCHITECTURE.md "Cron service configuration", which has the arithmetic.
   - ✅ **Exercised against real data** — first real capture 2026-08-25 12:40Z: GW1, 17 rows, `dropped` and `failed` both empty, and the gate correctly withheld it until after bonus settled rather than when `finished` flipped. The mapping has now parsed a real scored gameweek. See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §7.
-  - Still open: whether `current[]` **backfills** a season or only returns recent gameweeks. GW1 alone cannot tell those apart — `gameweeksSeen: [1]` is consistent with both. GW2 is the first run that answers it, and it decides whether a missed poll costs anything.
+  - ✅ **Answered 2026-09-01, by the GW2 run: `current[]` is cumulative, so a missed poll costs nothing.** The capture returned `{"gameweek":2,"rowsSaved":34,"gameweeksSeen":[1,2],"dropped":[],"failed":[]}` — 17 managers × 2 gameweeks, meaning it re-supplied GW1 alongside GW2 rather than only the latest. The self-healing property the job was designed around is now observed rather than assumed.
+    - **It happened to be tested under load.** This run was the recovery from the Cloudflare block of the same day (ARCHITECTURE.md "Egress and Cloudflare"), so the missed window was real, not simulated, and it healed completely on the first successful poll.
+    - **The limit, stated honestly:** `[1,2]` at GW2 rules out "latest only", which was the failure mode that mattered. It cannot yet distinguish "the whole season" from "a rolling window of N" for any N ≥ 2. A gap of several gameweeks is what would separate those, and nothing needs to force that test — the next multi-week outage will answer it for free.
 
 ### Phase 2 — money pot, dues and winnings
 - Owner enters the **pot total directly**, plus prize rules, configured once at setup
@@ -208,7 +210,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 ## Known risks
 
 - **Unofficial API** — first-party but undocumented; no stability guarantee, no terms coverage, shapes shift between seasons
-- **Cloudflare IP blocking** — the FPL API rejects many datacenter IPs; this drives the hosting choice (see ARCHITECTURE.md)
+- **Cloudflare IP blocking** — the FPL API rejects many datacenter IPs; this drives the hosting choice (see ARCHITECTURE.md). **No longer a risk but an observed event**: production was blocked on 2026-09-01 and recovered only by redeploying onto a different address in the same pool. A redeploy is a reroll, not a fix, so the egress proxy is now owed work rather than a contingency
 - **Deep-link behaviour varies** across iOS / Android / desktop
 - **Season rollover** resets league and gameweek IDs
 
