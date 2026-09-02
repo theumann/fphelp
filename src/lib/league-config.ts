@@ -6,11 +6,13 @@
  * so one deployment serves as many leagues as have been created — see
  * docs/MULTI-LEAGUE.md phase A.
  *
- * What still uses `REFERENCE_LEAGUE` is the capture cron and the operational scripts,
- * which have no URL to take a league from. Making the cron cover every league is phase B;
- * until then it captures this one, and a second league created for testing is *not*
- * captured. That is deliberate for a throwaway league and wrong for a real one, which is
- * why phase B must land before anyone else is invited.
+ * The **capture cron no longer reads it either** — since phase B it iterates the `leagues`
+ * table, so every league is captured and none has to be named in the environment.
+ *
+ * What is left is the **operational scripts**, where it is only a default: `add-owner`,
+ * `clear-test-digest`, `fpl-snapshot` and `record-fixtures` all act on one league and use
+ * this when none is given on the command line. So `FPL_LEAGUE_ID` now changes nothing
+ * about a running deployment — it changes what a script does when you do not tell it.
  */
 
 /** The reference league, used when nothing is configured. */

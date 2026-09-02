@@ -27,16 +27,19 @@ import {
   users,
 } from './schema'
 
-/** Creates the league row on first use, or returns the existing one. */
-export async function ensureLeague(fplLeagueId: number, name: string) {
-  const existing = await db.query.leagues.findFirst({
-    where: eq(leagues.fplLeagueId, fplLeagueId),
-  })
-  if (existing) return existing
-
-  const [created] = await db.insert(leagues).values({ fplLeagueId, name }).returning()
-  return created
-}
+/**
+ * `ensureLeague` was removed here, and the space is left with a note because the function
+ * is the obvious thing to reach for and reintroducing it would reopen a closed hole.
+ *
+ * It created a league row on first use, which every page called on load. That was safe
+ * only while the league ID came from the environment. Once the ID comes from a URL segment
+ * it means anyone can mint a league by typing a number, and once the cron iterates the
+ * `leagues` table it means a typo in a script could quietly add a league to be captured.
+ * Leagues are now created deliberately, by `bootstrap-owner.mts` and `add-owner.mts`.
+ *
+ * If you need "find or create", you almost certainly need `findLeagueByFplId` and an
+ * explicit refusal.
+ */
 
 /**
  * The league a URL segment names, or null.
@@ -90,6 +93,26 @@ export async function listLeaguesForUser(userId: string): Promise<LeagueSummary[
     .innerJoin(leagues, eq(leagues.id, leagueUsers.leagueId))
     .where(eq(leagueUsers.userId, userId))
     .orderBy(leagueUsers.createdAt)
+}
+
+/**
+ * Every league, oldest first — the capture cron's work list.
+ *
+ * The order is load-bearing rather than tidy. A run that exhausts its time budget stops
+ * starting new leagues, so whatever sorts last is what gets deferred to the next poll;
+ * oldest-first means the long-established league is captured before a throwaway test one
+ * ever costs it a place. Deferral is safe either way — the next poll picks it up — but
+ * "safe" and "the real league goes first" are worth having together.
+ *
+ * Unfiltered on purpose. A league with no owners still has managers whose history cannot
+ * be backfilled once they leave, and dropping it from capture would be a silent decision
+ * to lose that.
+ */
+export async function listAllLeagues(): Promise<LeagueSummary[]> {
+  return db
+    .select({ id: leagues.id, fplLeagueId: leagues.fplLeagueId, name: leagues.name })
+    .from(leagues)
+    .orderBy(leagues.createdAt)
 }
 
 /**

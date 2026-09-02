@@ -125,6 +125,9 @@ for a real one, which is the same reason phase B must land before anyone is invi
 
 ### B. Make the cron handle every league
 
+**Done 2026-09-01.** The four open questions below are answered under the rule; what shipped
+is recorded after them.
+
 **Must land before phase C, not after.** The moment a stranger creates a league, its history
 starts accruing — and `entry/{id}/history` cannot be backfilled for managers who leave. A
 new league whose capture never runs loses that permanently and silently, which is the exact
@@ -148,6 +151,43 @@ Open questions for this phase:
 The wider consequence, from ROADMAP Phase 5: at this volume **the egress-proxy mitigation
 stops being "on the books" and becomes real work**, and the poll gate stops being an
 optimisation — it becomes the thing keeping the app unblocked.
+
+---
+
+#### What shipped, and the answers
+
+The scaling problem was smaller than it looked, because it assumed the loop wrapped the
+whole job. It does not: `bootstrap-static` and `event-status` are **global**, so the gate
+was moved in front of the loop. A run with no settled gameweek now makes two FPL calls
+whatever the league count, and only a capturing run pays per league. Ten leagues idle at
+~192 calls a week rather than ~1,150.
+
+- **Iterate within one run**, not a cron service per league. Services here are named for
+  the job, and a service per league would make the dashboard a list of tenants.
+- **Yes to a per-run budget** — `RUN_BUDGET_MS`, 2 minutes. It stops the run *starting*
+  new leagues; work in flight always finishes, so a capture is never cut in half. Leagues
+  not reached are `deferred` and taken by the next poll, which is only safe because a
+  partial capture already self-heals: fewer stored entries than the roster reads as
+  outstanding. Leagues are ordered oldest-first so a throwaway never displaces the real one.
+- **A block aborts everything.** It is per-IP, and 2026-09-01 settled that empirically —
+  all four endpoints refused this host at once. Continuing would spend the run hammering an
+  API that is already refusing us. Rows collected before the block are saved.
+- **Healthy means every league.** Any league erroring returns non-2xx, which the cron script
+  turns into a failed Sentry check-in via its exit code — so no change was needed in the
+  script or the monitor config. `deferred` is not a failure.
+
+Two things worth knowing that were not on the list:
+
+- **`ensureLeague` is gone**, having lost its last caller. It is the obvious thing to reach
+  for and would reopen phase A's hole from a new direction: with the cron iterating the
+  table, anything that creates a league row silently enrolls it for capture.
+- **`FPL_LEAGUE_ID` no longer affects a running deployment.** It survives as the default for
+  the operational scripts when no league is named. That is the whole of what phase A and B
+  set out to remove.
+
+**Still owed:** the egress proxy. The gate keeps the idle rate flat, but a capturing run
+still scales linearly with leagues, and the block is now an observed event rather than a
+risk.
 
 ### C. Invited owners create their own leagues
 
