@@ -310,7 +310,19 @@ retry is safe.
 
 ## History capture
 
-`POST /api/jobs/capture-history` snapshots `entry/{id}/history` → `current[]` for every manager, and upserts `managers` from the same standings fetch.
+`POST /api/jobs/capture-history` snapshots `entry/{id}/history` → `current[]` for every manager **of every league**, and upserts `managers` from the same standings fetch.
+
+**The run is gated once, then loops leagues.** `bootstrap-static` and `event-status` are global — they say nothing about a particular league — so `gameweekGate` is asked once per run, and a run that finds no settled gameweek returns having made exactly two FPL calls, whatever the league count. Only when it opens does the run pay per-league: one standings call plus one history call per manager, roughly 20 for an 18-manager league.
+
+That split is what makes many leagues affordable against an API that blocks on reputation. Ten leagues cost ~192 calls a week idling and ~200 on the one run that captures, rather than ~1,150 idling if every poll refreshed every roster.
+
+Three consequences of the loop, each a decision rather than a fallout:
+
+- **A skipped poll refreshes no rosters.** `upsertManagers` now runs only on a capturing run, off the standings call that run needed anyway. So a manager who joins mid-week reaches the `managers` table when the gameweek settles, not within the hour. Nothing user-facing reads that table — every page builds its roster live from standings — and its job is to record who was in the league at capture time, which is when it is now written.
+- **A wall-clock budget (`RUN_BUDGET_MS`, 2 minutes) stops the run starting new leagues**, so a slow FPL cannot produce an unbounded run that overlaps the next hourly firing. Work already started always finishes; a league never reached is reported `deferred` and picked up by the next poll. This is safe only because a partial capture is already self-healing, and leagues are ordered oldest-first so a throwaway test league never costs the established one its place.
+- **A block aborts the whole run.** `FplBlockedError` is per-IP, not per-league — confirmed on 2026-09-01 when all four endpoints refused this host at once — so the remaining leagues would fail identically and continuing would hammer an API that is already refusing us. Rows collected before the block are saved.
+
+**What "healthy" means with many leagues:** any league erroring makes the run an error, which is a non-2xx and therefore a failed Sentry check-in. Nine successes must not hide the tenth league quietly losing history that cannot be backfilled once a manager leaves. A `deferred` league is not a failure — the next poll takes it.
 
 - **Bearer-token guarded** on `JOBS_TOKEN`, and **fails closed**: an unset variable rejects every request rather than leaving the endpoint open. Production must have it set or the job cannot run at all.
 - **Sequential, one manager at a time.** Not a performance oversight — 18 parallel requests from a shared Railway egress IP is the traffic shape most likely to attract the Cloudflare block described above.
@@ -331,7 +343,11 @@ Why hourly is enough: nothing waits on this job inside an hour. The composer and
 
 Why Sunday–Wednesday rather than the Monday–Tuesday actually observed: GW1 2026/27 settled Tuesday morning UTC (still provisional at 24 Aug 23:54Z, captured 12:40Z on the 25th), and an ordinary Sat–Sun gameweek should settle Monday. But December carries midweek gameweeks and blank/double gameweeks move the settling day around, so Wednesday is cheap insurance against the weeks that do not look like this one.
 
-**Why not tighter still**, e.g. a single weekly firing: that is only safe if a missed window self-heals, which depends on whether `history.current[]` returns the whole season or only recent gameweeks — [GW1-VERIFICATION §1](docs/GW1-VERIFICATION.md), unanswered until GW2's run, since `gameweeksSeen: [1]` fits both. If it backfills a full season the cadence can drop to roughly `0 12 * * 2` and lose nothing; if it does not, this is near the floor. Revisit with that answer in hand.
+**Why not tighter still**, e.g. a single weekly firing: that is only safe if a missed window self-heals, which depends on whether `history.current[]` returns the whole season or only recent gameweeks.
+
+**Answered on 2026-09-01: it is cumulative.** The GW2 run returned `gameweeksSeen: [1,2]`, 34 rows for 17 managers, re-supplying GW1 alongside GW2 — and it did so recovering a *real* missed window, the Cloudflare block of the same day, rather than a simulated one. So a missed poll costs nothing and the cadence could in principle drop to roughly `0 12 * * 2`.
+
+Two reasons it has not: `[1,2]` at GW2 rules out "latest only" but cannot yet separate "the whole season" from a rolling window of N ≥ 2, and hourly polling is cheap now that a skipped run is two calls regardless of league count. Revisit if the call volume ever argues for it.
 
 Still unmeasured either way: what a scheduled firing actually costs in compute time. §7 has it.
 
@@ -348,7 +364,7 @@ Its configuration:
 
 **Known coupling:** `DATABASE_URL` is a *build-time* requirement for the app, not just a runtime one — the eager pool above plus `DrizzleAdapter(db, …)` at module scope in `src/auth.ts`. It doesn't affect the web service, which has the variable, but it will break any CI build or fresh environment without a database attached. Making it genuinely lazy needs the NextAuth setup restructured; a `Proxy` over `db` alone is not enough, because the adapter inspects the object on import.
 
-**What a poll costs.** `captureDecision` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to make the 18 per-manager calls at all. It says no unless the last finished gameweek passes `isGameweekReady` *and* isn't already stored for every manager. So the weekly cost is one real capture and ~95 skipped polls that refresh the roster and stop. `?force=1` re-captures a stored gameweek, for backfills; it does not bypass readiness.
+**What a poll costs.** `gameweekGate` (`src/lib/fpl/capture.ts`) decides from two cheap calls — `bootstrap-static` and `event-status` — whether to touch any league at all, and `captureDecision` adds the per-league half: is this gameweek already stored for every manager here? So the weekly cost is one real capture and ~95 polls that make two calls and stop. `?force=1` re-captures a stored gameweek, for backfills; it does **not** bypass readiness, because `finished` flips before bonus points apply and forcing past the gate would be a one-keystroke way to store pre-bonus scores that look entirely plausible.
 
 Completeness is measured as *distinct entries stored for that gameweek* against the roster size, not a "captured" flag. A run that lost two managers to a flaky API is therefore retried by the next poll automatically. A departed manager keeps their rows, so the comparison is `>=` — otherwise a shrinking roster would stall the poll into re-capturing forever.
 
