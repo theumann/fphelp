@@ -49,10 +49,17 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code. Local state stays out; the repo profile is shared, because it is this
+# repo describing its own gates, review traps and deploy behaviour — the sort of thing a
+# fresh clone should not have to rediscover.
+#
+# `.claude/*` and not `.claude/`: git will not re-include a file whose parent directory is
+# excluded, so with the directory form the negation below is silently ignored. That is not
+# hypothetical — it is why the profile spent two days untracked without anyone noticing.
+.claude/*
+!.claude/commit-and-push.md
+
 /.next-e2e/
-.claude/
 
 # Playwright screenshot output (npm run e2e:screens)
 /screenshots/
