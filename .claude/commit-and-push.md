@@ -27,6 +27,8 @@ Check these explicitly when the diff touches the area — full explanations unde
 - Money arithmetic in integer cents; fixed prizes and expenses off the top, percentages on the remainder
 - `digests` unique per `(league_id, gameweek)`; `messages` deliberately not unique
 - Nothing treats a link tap, or anything else, as proof a message was delivered
+- **No implicit league creation.** Resolving a league is read-only — `findLeagueByFplId`, never a find-or-create. `ensureLeague` was deleted for this reason and the obvious instinct is to bring it back. Two things now depend on its absence: the league comes from a URL segment, so find-or-create lets anyone mint a league by typing a number; and the capture cron iterates the `leagues` table, so any row that appears is silently enrolled for capture
+- **The capture gate is evaluated once per run, before the league loop.** `bootstrap-static` and `event-status` are global. A change that moves the gate inside the per-league loop, or adds a per-league FPL call ahead of it, turns a skipped poll from 2 calls into 2 + N — against an API that blocked this deployment on 2026-09-01. It will not fail any test; the tests do not count calls
 
 If the diff touches the FPL client, also confirm nothing has quietly widened what a `null` from `lastFinishedGameweek()` is taken to mean.
 
