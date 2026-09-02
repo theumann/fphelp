@@ -213,7 +213,7 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 ## Known risks
 
 - **Unofficial API** — first-party but undocumented; no stability guarantee, no terms coverage, shapes shift between seasons
-- **Cloudflare IP blocking** — the FPL API rejects many datacenter IPs; this drives the hosting choice (see ARCHITECTURE.md). **No longer a risk but an observed event**: production was blocked on 2026-09-01 and recovered only by redeploying onto a different address in the same pool. A redeploy is a reroll, not a fix, so the egress proxy is now owed work rather than a contingency
+- **Cloudflare IP blocking** — the FPL API rejects many datacenter IPs; this drives the hosting choice (see ARCHITECTURE.md). **No longer a risk but an observed event**: production was blocked on 2026-09-01 and recovered only by redeploying, which draws a new egress address. A redeploy is a reroll, not a fix, so the egress proxy is now owed work rather than a contingency
 - **Deep-link behaviour varies** across iOS / Android / desktop
 - **Season rollover** resets league and gameweek IDs
 
