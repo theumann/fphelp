@@ -140,10 +140,15 @@ export async function addOwnerRow(p: Pool, leagueId: string, email: string, name
 }
 
 /** A signed-in user who owns no league — the `NotAnOwner` case. */
-export async function seedStranger(p: Pool, email = 'stranger@example.test') {
+export async function seedStranger(
+  p: Pool,
+  email = 'stranger@example.test',
+  /** Grants `can_create_leagues` — what `add-owner.mts` does and Setup's owners list does not. */
+  mayCreate = false,
+) {
   const { rows } = await p.query<{ id: string }>(
-    `INSERT INTO users (email, email_verified) VALUES ($1, now()) RETURNING id`,
-    [email],
+    `INSERT INTO users (email, email_verified, can_create_leagues) VALUES ($1, now(), $2) RETURNING id`,
+    [email, mayCreate],
   )
   const sessionToken = randomUUID()
   await p.query(

@@ -43,6 +43,13 @@
       "when": 1787449867123,
       "tag": "0005_skinny_gamma_corps",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788398545167,
+      "tag": "0006_robust_giant_girl",
+      "breakpoints": true
     }
   ]
 }

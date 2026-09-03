@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "can_create_leagues" boolean DEFAULT false NOT NULL;

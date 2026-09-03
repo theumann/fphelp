@@ -1,4 +1,5 @@
-import { seedLeague, seedStranger } from './support/db'
+import { FIXTURE_LEAGUE_ID } from '../src/lib/fpl/fixtures'
+import { listOwnerEmails, seedLeague, seedStranger } from './support/db'
 import { expect, leagueUrl, test, useSession } from './support/test'
 
 /**
@@ -115,4 +116,83 @@ test('a signed-in user with no leagues is told so, and can still sign out', asyn
   // They stay on `/` now rather than being redirected through it, so the nav has to render
   // here — without it there is no way out of this page at all.
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+})
+
+/**
+ * Creating a league (docs/MULTI-LEAGUE.md phase C).
+ *
+ * **Do not assert on `getByRole('alert')` here.** Next renders its route announcer as
+ * `role="alert"`, so the role matches two elements and the assertion fails in strict mode
+ * on a page that is behaving correctly. Match the text.
+ *
+ * The permission check is the part worth testing hardest. `can_create_leagues` is what
+ * stops the allowlist becoming transitive — an owner can add a co-owner, which necessarily
+ * creates a `users` row, and without the flag that person could otherwise go on to create
+ * leagues and add others.
+ */
+test.describe('creating a league', () => {
+  test('an invited creator with no leagues adds one, and lands in it', async ({
+    page,
+    db,
+  }) => {
+    const creator = await seedStranger(db, 'creator@example.test', true)
+    await useSession(page, creator.sessionToken)
+
+    await page.goto('/leagues')
+    await expect(page.getByRole('heading', { name: 'No leagues yet' })).toBeVisible()
+
+    await page.getByRole('textbox', { name: 'FPL league ID' }).fill(String(OTHER_LEAGUE))
+    await page.getByRole('button', { name: 'Look up' }).click()
+
+    // The confirmation step: the real name comes back from the API before anything is
+    // written, which is what makes a mistyped digit a visible mistake.
+    await expect(page.getByText(`Test league ${OTHER_LEAGUE}`)).toBeVisible()
+    expect(await db.query('SELECT count(*)::int n FROM leagues').then((r) => r.rows[0].n)).toBe(0)
+
+    await page.getByRole('button', { name: 'Create this league' }).click()
+    await expect(page).toHaveURL(`/l/${OTHER_LEAGUE}/send`)
+  })
+
+  test('a co-owner added through Setup cannot create leagues', async ({ page, db }) => {
+    // No flag — exactly what `addOwner` produces. The form must not be offered, and the
+    // action must refuse even if it is called anyway.
+    const invitee = await seedStranger(db, 'co-owner-only@example.test')
+    await useSession(page, invitee.sessionToken)
+
+    await page.goto('/leagues')
+    await expect(page.getByRole('heading', { name: 'No leagues yet' })).toBeVisible()
+    await expect(page.getByRole('textbox', { name: 'FPL league ID' })).toHaveCount(0)
+    await expect(page.getByText(/Ask whoever gave you access/)).toBeVisible()
+  })
+
+  test('an invite code is refused, and never becomes a league', async ({ page, db }) => {
+    const creator = await seedStranger(db, 'creator@example.test', true)
+    await useSession(page, creator.sessionToken)
+
+    await page.goto('/leagues')
+    await page.getByRole('textbox', { name: 'FPL league ID' }).fill('1xrliv')
+    await page.getByRole('button', { name: 'Look up' }).click()
+
+    await expect(page.getByText(/not a league ID/i)).toBeVisible()
+    expect(await db.query('SELECT count(*)::int n FROM leagues').then((r) => r.rows[0].n)).toBe(0)
+  })
+
+  test('a league someone else already set up is refused, not stolen', async ({
+    page,
+    db,
+    league,
+  }) => {
+    // `league` seeds the fixture league owned by someone else; first claim wins.
+    const creator = await seedStranger(db, 'creator@example.test', true)
+    await useSession(page, creator.sessionToken)
+
+    await page.goto('/leagues')
+    await page.getByRole('textbox', { name: 'FPL league ID' }).fill(String(FIXTURE_LEAGUE_ID))
+    await page.getByRole('button', { name: 'Look up' }).click()
+    await page.getByRole('button', { name: 'Create this league' }).click()
+
+    await expect(page.getByText(/already set up here/i)).toBeVisible()
+    // Still one league, still owned by the original owner alone.
+    expect(await listOwnerEmails(db, league.leagueId)).toEqual(['owner@example.test'])
+  })
 })

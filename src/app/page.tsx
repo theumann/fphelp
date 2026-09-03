@@ -3,79 +3,32 @@ import { redirect } from 'next/navigation'
 
 import { auth } from '@/auth'
 import { Logo } from '@/components/logo'
-import { Nav } from '@/components/nav'
-import { Page, PageHeader } from '@/components/ui'
 import { listLeaguesForUser } from '@/db/queries'
 import { leaguePath } from '@/lib/league-access'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * The landing page, and — since leagues moved into the URL — the league chooser.
+ * The landing page for signed-out visitors, and a router for everyone else.
  *
- * Three cases for a signed-in owner:
+ * A signed-in owner never sees anything here. With exactly one league they go straight to
+ * its composer — the app's premise is that the draft is waiting when they open it, and a
+ * chooser listing one item is a click charged for nothing. With none or several, they go
+ * to `/leagues`, which owns the list and the create form.
  *
- * - **exactly one league**: redirected straight to its composer, which is the behaviour
- *   from before there was more than one. The app's premise is that the draft is waiting
- *   when they open it, and a chooser listing a single item is a click charged for nothing.
- * - **several**: the chooser below. The nav is rendered here rather than by the root
- *   layout, reduced to the mark and Sign out — there is no league yet to link into.
- * - **none**: an invited owner who has not been added to a league yet. The create-league
- *   flow that will answer this is phase C; until then it says who to ask, which is true.
+ * Keeping the list off this page is what lets both behaviours coexist: a creator with one
+ * league is still routed to their composer, and can still reach the form.
  *
- * Signed out, it is the same thin landing page as before. Ordinary league members never
- * sign in and are not the audience.
+ * Deliberately thin on marketing. Ordinary league members never sign in and are not the
+ * audience; the only person who reaches this page and belongs is an owner who is signed
+ * out, so the page's whole job is to say what this is and offer the one door.
  */
 export default async function Home() {
   const session = await auth()
 
   if (session?.user?.id) {
     const leagues = await listLeaguesForUser(session.user.id)
-    if (leagues.length === 1) redirect(leaguePath(leagues[0].fplLeagueId, '/send'))
-
-    return (
-      <>
-        {/* The reduced bar: no league is chosen yet, so there are no league links to
-            offer — but an owner with no leagues now stays here rather than passing
-            through, and without this there would be no way to sign out. */}
-        <Nav who={session.user.email} />
-        <main>
-          <Page>
-            <PageHeader
-              title={leagues.length === 0 ? 'No leagues yet' : 'Your leagues'}
-              subtitle={
-                leagues.length === 0
-                  ? 'Your account is signed in but does not administer a league yet. Ask whoever invited you to add you to one from their Setup page.'
-                  : 'Each league has its own pot, prize rules and recipients.'
-              }
-            />
-
-            <ul className="flex flex-col gap-2">
-              {leagues.map((league) => (
-                <li key={league.id}>
-                  <Link
-                    href={leaguePath(league.fplLeagueId, '/send')}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4 transition-colors hover:bg-surface-muted"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{league.name}</span>
-                      {/* The FPL ID is shown because it is also what the URL says, so a
-                          shared link can be told apart from another league's at a glance. */}
-                      <span className="block text-sm text-faint">
-                        FPL league {league.fplLeagueId}
-                      </span>
-                    </span>
-                    <span aria-hidden className="text-muted">
-                      →
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Page>
-        </main>
-      </>
-    )
+    redirect(leagues.length === 1 ? leaguePath(leagues[0].fplLeagueId, '/send') : '/leagues')
   }
 
   return (
