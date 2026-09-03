@@ -23,37 +23,78 @@ const MAIL_FAILURE = {
     'send to any address but the account owner until a domain is verified.',
 }
 
-const SIGNIN_ERRORS: Record<string, { title: string; detail: string }> = {
-  // `Configuration` is what a refused send actually produces: `EmailSignInError` is not
-  // in Auth.js's client-visible allowlist, so it collapses to this before reaching the
-  // URL. The raw name is mapped too, in case a future path surfaces it unsanitised.
-  Configuration: MAIL_FAILURE,
-  EmailSignInError: MAIL_FAILURE,
-  AccessDenied: {
-    title: 'That address is not an owner of this league',
-    detail:
-      'Sign-in is allowlist-based and there is no self-signup. Ask an existing owner to ' +
-      'add you.',
-  },
-  /**
-   * Names the likely cause rather than only the rule.
-   *
-   * "Links work once and expire" is true and sends the reader hunting for the wrong
-   * explanation — they assume they were slow. In practice the common cause is a link
-   * forwarded through a chat app, whose preview fetcher opens the URL to build a card and
-   * spends the single-use token seconds before the person taps it. That happened three
-   * times in production on 2026-08-17 before the HTTP logs named WhatsApp.
-   *
-   * This page is read *after* it has gone wrong, so it is the one place where saying so
-   * converts a dead end into an instruction.
-   */
-  Verification: {
-    title: 'That link is no longer valid',
-    detail:
-      'Sign-in links work once and expire quickly. If you forwarded it through WhatsApp ' +
-      'or iMessage, the preview spent it - request a fresh one below and open it on this ' +
-      'device.',
-  },
+/**
+ * The "or write to a human" half of the refusal, appended only when there is a human.
+ *
+ * An environment variable rather than a literal, for two reasons. It is rendered to
+ * anyone who reaches the sign-in page, so it wants to be an address chosen for that —
+ * changeable without a deploy, and not necessarily the same one in local development as
+ * in production. And a repo should not carry a personal address that ends up scraped off
+ * a public page.
+ *
+ * Unset means the sentence simply does not appear, which is the right default: promising
+ * a reply nobody is reading is worse than not offering one.
+ */
+function contactSentence(): string {
+  const contact = process.env.SUPPORT_EMAIL?.trim()
+  return contact ? ` Still stuck? Write to ${contact}.` : ''
+}
+
+/**
+ * Built per render rather than held as a module constant, so `SUPPORT_EMAIL` is read at
+ * request time. A constant would capture whatever the variable was when the module first
+ * loaded — on Railway that is the build, where a runtime-only variable is simply absent,
+ * and the contact line would vanish for reasons nobody could see from the page.
+ */
+function signInErrors(): Record<string, { title: string; detail: string }> {
+  return {
+    // `Configuration` is what a refused send actually produces: `EmailSignInError` is not
+    // in Auth.js's client-visible allowlist, so it collapses to this before reaching the
+    // URL. The raw name is mapped too, in case a future path surfaces it unsanitised.
+    Configuration: MAIL_FAILURE,
+    EmailSignInError: MAIL_FAILURE,
+    /**
+     * Deliberately says nothing about a league.
+     *
+     * It used to read "not an owner of *this* league", which was true when a deployment
+     * served exactly one. It is now wrong twice over: the allowlist is `users`, which is
+     * global and says nothing about leagues, and someone can legitimately be on it with no
+     * league at all — that is exactly what `add-owner.mts --invite` produces for a person
+     * who is about to create their own. Naming a league here would send a reader looking
+     * for the wrong fix.
+     *
+     * Two populations land here — someone typing an address speculatively, and someone who
+     * should have access but was added under a different address. Only the second can act,
+     * which is what the one instruction and the optional contact line are for. Kept to a
+     * sentence deliberately: this is read by someone already stuck, and the longer version
+     * explaining the allowlist was answering a question nobody in that position is asking.
+     */
+    AccessDenied: {
+      title: "That address doesn't have access",
+      detail:
+        'If you administer a league here, ask a co-owner to add your email address from ' +
+        'their Setup page.' + contactSentence(),
+    },
+    /**
+     * Names the likely cause rather than only the rule.
+     *
+     * "Links work once and expire" is true and sends the reader hunting for the wrong
+     * explanation — they assume they were slow. In practice the common cause is a link
+     * forwarded through a chat app, whose preview fetcher opens the URL to build a card and
+     * spends the single-use token seconds before the person taps it. That happened three
+     * times in production on 2026-08-17 before the HTTP logs named WhatsApp.
+     *
+     * This page is read *after* it has gone wrong, so it is the one place where saying so
+     * converts a dead end into an instruction.
+     */
+    Verification: {
+      title: 'That link is no longer valid',
+      detail:
+        'Sign-in links work once and expire quickly. If you forwarded it through WhatsApp ' +
+        'or iMessage, the preview spent it - request a fresh one below and open it on this ' +
+        'device.',
+    },
+  }
 }
 
 const UNKNOWN_ERROR = {
@@ -62,7 +103,7 @@ const UNKNOWN_ERROR = {
 }
 
 function SignInError({ code }: { code: string }) {
-  const { title, detail } = SIGNIN_ERRORS[code] ?? UNKNOWN_ERROR
+  const { title, detail } = signInErrors()[code] ?? UNKNOWN_ERROR
   return (
     <div role="alert" className="rounded-lg bg-danger-surface p-3 text-sm text-danger">
       <p className="font-medium">{title}</p>
