@@ -55,6 +55,8 @@ In order:
 3. `npm test` — Vitest.
 4. `npm run build` — catches server/client boundary errors that lint and typecheck both miss, and it is what Railway will run. If it fails oddly right after editing `package.json` or config, delete `.next` and retry — a stale Turbopack cache produces misleading errors.
 
+**Stop any running `npm run dev` before starting these.** `NEXT_DIST_DIR` does not relocate `.next/dev/types/`, so a build and a dev server race on it and lose: `tsc` then fails inside generated code, and the dev server drops routes so every dynamic path 404s. Neither symptom points at the cause. Recovery is `Remove-Item -Recurse -Force .next` with the server stopped. It cost a debugging session on 2026-09-07 — see **Gotchas** in `CLAUDE.md`.
+
 ## After the push
 
 ### Merge to main, which deploys

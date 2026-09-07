@@ -27,7 +27,7 @@ Brand colours live in the logo, not in the tokens: the gradient runs cyan `#0399
 - `npm run db:clear-digest -- --gw N` — deletes one gameweek's digest, messages and deliveries for the reference league. Dry run without `--confirm`. Manual only, never a deploy hook — it removes the owner's own writing. See [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §6b.
 - `npm test` — Vitest, the pure computation layer
 - `npm run e2e:db` — creates and migrates `fphelp_e2e`. Run once, and again when migrations change
-- `npm run e2e` — Playwright. Builds the app into `.next-e2e` and serves it, so it does not disturb a `next dev` you have running
+- `npm run e2e` — Playwright. Builds the app into `.next-e2e` and serves it, so it does not take port 3000 from a `next dev` you have running. **It does not isolate that server, and running both at once corrupts it** — see the build/dev collision under Gotchas
 - `npm run e2e:screens` — screenshots of every page in both themes into `test-results/screens/`. Asserts nothing; it is for looking at
 - `npm run build:logo` — regenerates the logo variants and icons from `assets/logo_original.png`. Manual; the outputs are committed
 - `npm run fpl:record` — overwrites `src/lib/fpl/recorded/*.json` with the live API's current bytes, the fixtures `recorded.test.ts` checks the parsers against. **Only meaningful on a settled gameweek** — check `fpl:snapshot` reports `statsReady: true` first, or you bake a provisional payload in and the send gate's ready path stops being tested. Outputs are committed; `bootstrap-static` keeps only `events`, since the other ~1 MB is players and teams this app never reads
@@ -66,6 +66,8 @@ The cron's Sentry check-in **upserts its own schedule** (`monitorConfig` in `scr
 ## Gotchas
 
 These are the traps that produce silently wrong output rather than errors:
+
+- **Never run `npm run build` or `npm run e2e` while `npm run dev` is up.** `NEXT_DIST_DIR` relocates the build output but **not** the generated types: both commands write `.next/dev/types/` regardless, so the `.next-e2e` trick keeps them off port 3000 and does nothing to stop them racing on that directory. The loser is a file with a duplicated, truncated block, and the damage lands two places that both point away from the cause — `tsconfig.json` includes `.next/dev/types/**/*.ts`, so `tsc` and `next build` start failing on line numbers inside generated code nobody wrote; and the dev server is left with an incomplete route table, so **every dynamic route 404s as though it had never existed**. Observed 2026-09-07: `/l/<any id>/send` returned the app's own "Nothing here" page while `/leagues` and `/signin` served fine, and `app-paths-manifest.json` listed no `/l/[leagueId]` entries at all. The fix is `Remove-Item -Recurse -Force .next` with the dev server stopped, then restart it — the branch is not broken and no code change will help.
 
 - **League average must be computed** as the mean of `event_total` across standings results. `events[].average_entry_score` is the *global* FPL average — using it looks fine and is wrong.
 - **`standings.results` is paginated.** Follow `has_next` / `?page_standings=N` or managers past 50 vanish from the digest.
