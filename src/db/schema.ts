@@ -43,6 +43,24 @@ export const users = pgTable('users', {
   // Required by the Auth.js Drizzle adapter.
   emailVerified: timestamp('email_verified', { withTimezone: true }),
   image: text('image'),
+  /**
+   * May this person create a league of their own?
+   *
+   * The one thing that keeps the allowlist from becoming transitive. Being in `users` is
+   * what lets an address sign in, and `addOwner` creates that row as a side effect of an
+   * owner adding a co-owner — necessary, since a co-owner who cannot sign in is useless.
+   * Once creating a league is a UI action, that side effect would otherwise mean anyone an
+   * owner invites can start their own league and invite others, and "someone the operator
+   * vouched for" degrades into "someone vouched for by someone they vouched for".
+   *
+   * So it defaults to **false** and is granted only by `scripts/add-owner.mts`, which
+   * needs production shell access — the operator, by construction. Co-owners added through
+   * Setup can administer the league they were added to and nothing else.
+   *
+   * Deliberately not a `role`. `role` is per-league and grants nothing; this is a property
+   * of the person, and it governs exactly one action.
+   */
+  canCreateLeagues: boolean('can_create_leagues').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

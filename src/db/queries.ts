@@ -72,6 +72,57 @@ export async function syncLeagueName(leagueId: string, name: string, current: st
   await db.update(leagues).set({ name }).where(eq(leagues.id, leagueId))
 }
 
+/** Whether this person may create leagues. See `users.can_create_leagues`. */
+export async function canCreateLeagues(userId: string): Promise<boolean> {
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) })
+  return user?.canCreateLeagues ?? false
+}
+
+export type CreateLeagueOutcome =
+  | { ok: true; league: LeagueSummary }
+  | { ok: false; reason: 'already-claimed' }
+
+/**
+ * Creates a league and makes this user its first owner.
+ *
+ * The two rows go in one transaction because a league with no owners is unreachable —
+ * nothing in the UI can adopt it, and the cron would capture history for a league nobody
+ * can see. A crash between the inserts would leave exactly that.
+ *
+ * **First claim wins, and the loser is told.** `fpl_league_id` is unique, so the second
+ * person to claim a league gets `already-claimed` rather than a unique-violation crash.
+ * That is the whole of the ownership model for now: nothing proves the claimant runs the
+ * league on FPL's side. It is defensible only because creation is gated on
+ * `can_create_leagues`, which the operator grants by hand — see docs/MULTI-LEAGUE.md,
+ * "how do you prove someone runs FPL league X".
+ *
+ * The insert is the check. Reading first and inserting after is a race that ends in a 500
+ * when two people claim the same league at once, and `onConflictDoNothing` turns that into
+ * an outcome the caller can render.
+ */
+export async function createLeague(
+  fplLeagueId: number,
+  name: string,
+  userId: string,
+): Promise<CreateLeagueOutcome> {
+  return db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(leagues)
+      .values({ fplLeagueId, name })
+      .onConflictDoNothing({ target: leagues.fplLeagueId })
+      .returning()
+
+    if (!created) return { ok: false, reason: 'already-claimed' }
+
+    await tx.insert(leagueUsers).values({ leagueId: created.id, userId })
+
+    return {
+      ok: true,
+      league: { id: created.id, fplLeagueId: created.fplLeagueId, name: created.name },
+    }
+  })
+}
+
 export interface LeagueSummary {
   id: string
   fplLeagueId: number

@@ -88,11 +88,11 @@ export function Nav({ who, prefix = null }: { who?: string | null; prefix?: stri
         {/* `min-w-0` lets this column give way before the links do when space runs out;
             `shrink-0` on the mark keeps it from being squeezed narrower than itself. */}
         <div className="flex min-w-0 flex-1 justify-center">
-          {/* The mark goes to `/`, which is the league chooser — the only way back to it
-              from inside a league, and the only navigation an owner with several leagues
-              has. For an owner with one, `/` redirects to their composer, so this is
-              still "home" in the sense it always was. */}
-          <Link href="/" className="shrink-0 px-1" aria-label="FPheLp">
+          {/* The mark goes to the chooser, not to `/`. `/` routes an owner with one league
+              straight back to their composer, so pointing here would make the mark a
+              no-op from inside that league — and would leave a creator with one league
+              no way to reach the create form. `/leagues` always renders. */}
+          <Link href="/leagues" className="shrink-0 px-1" aria-label="FPheLp">
             {/* `h-auto` is required with the CSS width override, or next/image keeps the
                 intrinsic height attribute and the mark is squashed. */}
             <Logo width={68} className="h-auto w-14 sm:w-[68px]" />

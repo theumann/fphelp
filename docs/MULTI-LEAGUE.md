@@ -191,6 +191,9 @@ risk.
 
 ### C. Invited owners create their own leagues
 
+**Done 2026-09-02.** What shipped is recorded after the decision, including one thing the
+decision below did not foresee.
+
 **Decided 2026-08-31: keep the allowlist. Do not build self-signup.**
 
 The instinct is that inviting other league managers requires opening sign-up. It does not,
@@ -231,8 +234,59 @@ open door.
 enough demand that vouching by hand is the bottleneck. At that point rate limiting, pruning
 and real ownership verification all come due together, and none of them is optional.
 
+**A middle step now exists in the ROADMAP** — "Request access" under Future Roadmap. It is
+not self-signup: a form that emails *the operator*, who still approves by hand. That keeps
+the property this section is built on, because the mail has one fixed recipient and so the
+app still cannot be pointed at an arbitrary address. It buys the stranger on `/signin`
+something to do without buying the relay risk.
+
 Still needed regardless: a decision about what a signed-in user with no leagues sees, and
 what happens when someone pastes a league ID that is already claimed.
+
+---
+
+#### What shipped, and the hole the plan did not see
+
+**The plan's own property nearly died on contact with the feature.** Phase C is "the
+operator vouches for each person personally" — but `addOwner`, the Setup owners list, has
+always created a `users` row as a side effect, because a co-owner who cannot sign in is
+useless. The moment *creating* a league becomes a UI action, that side effect means anyone
+an owner adds can start their own league and add others: the allowlist goes transitive and
+"vouched for by the operator" becomes "vouched for by someone they vouched for". Nothing in
+the plan is wrong; the consequence simply arrives from a direction it did not look.
+
+So creation is gated on **`users.can_create_leagues`**, a boolean defaulting to false and
+granted only by `scripts/add-owner.mts` — which needs production shell access, and is
+therefore the operator by construction. Setup's owners list still adds co-owners and still
+creates their `users` row; those people administer the league they were added to and
+nothing else. Deliberately not `role`, which is per-league and grants nothing: this is a
+property of the person and governs exactly one action.
+
+The rest, as built:
+
+- **`add-owner.mts --invite`** creates the user and no league. They sign in, land on
+  `/leagues` with none, and add their own. The flag is set on an existing user too, so
+  someone added as a co-owner through Setup can be promoted later.
+- **`/leagues` is the list and the only place a league is created**; `/` is now purely a
+  router. That split is not cosmetic: `/` sends an owner with one league to their composer,
+  which would have left a creator with exactly one league unable to reach the form. The nav
+  mark points at `/leagues` for the same reason.
+- **Two steps: look up, then claim.** The lookup writes nothing — a lookup that created a
+  row would make typing a number the act of claiming a league. The claim re-fetches the
+  name server-side rather than trusting the client's copy, since a Server Action is a public
+  endpoint and would otherwise store any label a claimant posted.
+- **Already claimed is an outcome, not a crash.** `createLeague` inserts with
+  `onConflictDoNothing` and reports `already-claimed`; reading first and inserting after is
+  a race that 500s when two people claim at once. The message names the fix: ask whoever set
+  it up to add you.
+- **Both rows in one transaction.** A league with no owners is unreachable — nothing can
+  adopt it, and the cron would capture history for a league nobody can see.
+
+**Ownership is still unproven, and the gate is what makes that tolerable.** Nothing checks
+`admin_entry`. First claim wins, and the cost of a wrong claim is real: `fpl_league_id` is
+unique, so a squatter blocks the genuine admin. That is defensible only while the set of
+people who can claim anything is people the operator vouched for by hand — which is exactly
+what the flag enforces, and what would have to change first if creation is ever opened up.
 
 #### Deferred with this decision
 
