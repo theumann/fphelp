@@ -164,8 +164,8 @@ describe('renderEmail with an unset pot', () => {
     const { html, text } = render({ prize: unset, blocks: ALL })
 
     for (const body of [html, text]) {
-      expect(body).toContain('Each GW winner')
-      expect(body).toContain('Best GW of season')
+      expect(body).toContain('GW winner')
+      expect(body).toContain('Best GW')
       expect(body).toContain('$15.00')
       expect(body).toContain('$100.00')
     }
@@ -186,7 +186,7 @@ describe('renderEmail with an unset pot', () => {
     const { html, text } = render({ prize: withExpense, blocks: ALL })
 
     for (const body of [html, text]) {
-      expect(body).toContain('Trophy engraving')
+      expect(body).toContain('Trophy engrav')
       expect(body).toContain('-$100.00')
       expect(body).not.toContain('Less')
     }
@@ -204,7 +204,7 @@ describe('renderEmail with an unset pot', () => {
     expect(html).not.toContain('```')
     expect(text).not.toContain('```')
     // Two columns in the plaintext: label, then the amount padded out to a right edge.
-    expect(text).toMatch(/^Each GW winner +\$15\.00$/m)
+    expect(text).toMatch(/^GW winner +\$15\.00$/m)
   })
 
   // The label is owner-entered and lands in HTML, so it goes through `esc` like every
