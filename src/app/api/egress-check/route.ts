@@ -1,8 +1,21 @@
 // Diagnostic route: does this container's egress IP reach the FPL API?
 //
-// The FPL API sits behind Cloudflare and rejects many datacenter IPs. Residential
-// IPs work; Railway's egress is the open question. See ARCHITECTURE.md
-// ("Egress and Cloudflare"). Delete this route once the answer is settled.
+// The FPL API sits behind Cloudflare and rejects many datacenter IPs. Railway's egress
+// address is redrawn on every deploy and is scored on its own reputation, so this answers
+// "is it us, is it them, or is it the address today" in one request. See ARCHITECTURE.md
+// ("Egress and Cloudflare"); it diagnosed the 2026-09-01 outage in minutes, which is why
+// it has outlived the "delete once settled" note it used to carry.
+//
+// **Token-guarded, and that is not optional.** It was open until 2026-09-07, when the app
+// was about to be linked publicly. Two reasons it cannot be:
+//
+//   - it discloses the egress IP and response timings to anyone who asks;
+//   - every call makes this server fire four requests at the FPL API, so an open loop over
+//     it is a stranger's lever on the one number that decides whether the app works at all.
+//     Being blocked is not hypothetical here — it has happened, and this endpoint would be
+//     a way to cause it rather than merely observe it.
+
+import { authorisedJobRequest } from '@/lib/jobs-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,7 +73,13 @@ async function egressIp(): Promise<string | null> {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // Same token as the capture job: both are operator-only and there is no reason for a
+  // second credential to keep in step.
+  if (!authorisedJobRequest(req)) {
+    return Response.json({ error: 'unauthorised' }, { status: 401 })
+  }
+
   const [ip, entries] = await Promise.all([
     egressIp(),
     Promise.all(

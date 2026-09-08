@@ -1,5 +1,3 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
-
 import {
   capturedEntryCount,
   listAllLeagues,
@@ -11,6 +9,7 @@ import { gameweekGate, runVerdict, type LeagueOutcome } from '@/lib/fpl/capture'
 import { FplBlockedError, fpl } from '@/lib/fpl/client'
 import { droppedGameweeks, historyRows, type HistoryRow } from '@/lib/fpl/history'
 import { buildRoster } from '@/lib/fpl/roster'
+import { authorisedJobRequest } from '@/lib/jobs-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,20 +39,6 @@ export const dynamic = 'force-dynamic'
  * work is idempotent but the FPL call rate would double for no gain.
  */
 const RUN_BUDGET_MS = 120_000
-
-function authorised(req: Request): boolean {
-  const expected = process.env.JOBS_TOKEN
-  // Fail closed. An unset token must not mean an open endpoint.
-  if (!expected) return false
-
-  const header = req.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-
-  // Hashing first gives both sides equal length, so timingSafeEqual can't throw and the
-  // token's length isn't leaked by an early return.
-  const digest = (s: string) => createHash('sha256').update(s).digest()
-  return timingSafeEqual(digest(provided), digest(expected))
-}
 
 interface LeagueReport {
   fplLeagueId: number
@@ -85,7 +70,7 @@ class RunBlocked extends Error {
 }
 
 export async function POST(req: Request) {
-  if (!authorised(req)) {
+  if (!authorisedJobRequest(req)) {
     return Response.json({ error: 'unauthorised' }, { status: 401 })
   }
 
