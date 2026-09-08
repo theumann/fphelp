@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { computeDigestStats } from '../digest/stats'
+
 import {
+  MONOSPACE_WIDTH,
+  placeLines,
+  renderStandings,
   NO_BLOCKS,
   dependsOnGameweek,
   effectiveBlocks,
@@ -73,8 +78,8 @@ describe('renderPrizeStructure', () => {
   it('still states what a gameweek and the best gameweek are worth', () => {
     const text = renderPrizeStructure({ ...base, potSet: false, potCents: 0 })
 
-    expect(text).toMatch(/^Each GW winner +\$15\.00$/m)
-    expect(text).toMatch(/^Best GW of season +\$100\.00$/m)
+    expect(text).toMatch(/^GW winner +\$15\.00$/m)
+    expect(text).toMatch(/^Best GW +\$100\.00$/m)
   })
 
   /**
@@ -96,14 +101,14 @@ describe('renderPrizeStructure', () => {
      */
     it('names each cost and shows it as a negative amount', () => {
       const text = renderPrizeStructure(withEngraving)
-      expect(text).toMatch(/^Trophy engraving +-\$100\.00$/m)
+      expect(text).toMatch(/^Trophy engrav\S* +-\$100\.00$/m)
       expect(text).not.toContain('Less')
     })
 
     it('keeps the pot line above the deduction, in the order the money moves', () => {
       const lines = renderPrizeStructure(withEngraving).split('\n')
       expect(lines.findIndex((l) => l.startsWith('Pot'))).toBeLessThan(
-        lines.findIndex((l) => l.startsWith('Trophy engraving')),
+        lines.findIndex((l) => l.startsWith('Trophy engrav')),
       )
     })
 
@@ -174,5 +179,104 @@ describe('effectiveBlocks', () => {
   it('leaves an already-empty selection alone', () => {
     expect(effectiveBlocks(NO_BLOCKS, false)).toEqual(NO_BLOCKS)
     expect(effectiveBlocks(NO_BLOCKS, true)).toEqual(NO_BLOCKS)
+  })
+})
+
+/**
+ * The width invariant, which is the whole reason the block is padded at all.
+ *
+ * WhatsApp wraps its monospace block at phone width. When a row exceeds it the label ends
+ * up on one line and its amount on the next, which reads as a broken app rather than a
+ * long label — and it is invisible from a desktop browser, where the block is wider. That
+ * shipped: on 2026-09-07 every row of the money section was 28 characters and wrapped on a
+ * real phone, while the paid places at 25 did not.
+ *
+ * So these assert the bound rather than any particular layout. A future change is free to
+ * rearrange the block; it is not free to make a line wider than a phone can show.
+ */
+describe('monospace width', () => {
+  const widest = (text: string) => Math.max(...text.split('\n').map((l) => l.length))
+
+  it('keeps every line within the budget for an ordinary league', () => {
+    expect(widest(renderPrizeStructure(base))).toBeLessThanOrEqual(MONOSPACE_WIDTH)
+  })
+
+  /** The case that broke it: an owner-written label is not ours to bound at the source. */
+  it('keeps within the budget however long an expense label is', () => {
+    const text = renderPrizeStructure({
+      ...base,
+      expenses: [{ label: 'Trophy engraving, shipping and the trophy itself', amountCents: 10_000 }],
+    })
+    expect(widest(text)).toBeLessThanOrEqual(MONOSPACE_WIDTH)
+    // Clipped visibly rather than silently, so the owner can shorten it in Setup.
+    expect(text).toContain('…')
+  })
+
+  /** Wide amounts squeeze the labels rather than the line. */
+  it('keeps within the budget for a league with a very large pot', () => {
+    const text = renderPrizeStructure({
+      ...base,
+      potCents: 1_234_567_00,
+      rankPrizeCents: [50_000_00, 30_000_00, 20_000_00],
+    })
+    expect(widest(text)).toBeLessThanOrEqual(MONOSPACE_WIDTH)
+  })
+
+  /**
+   * The places pair up only while a pair fits. Two per line is a budget saving, not a
+   * layout preference, so it gives way rather than wrapping.
+   */
+  it('drops the paid places to one per line when two would not fit', () => {
+    const wide = placeLines({ ...base, rankPrizeCents: [50_000_00, 30_000_00, 20_000_00] })
+    expect(wide.every((l) => l.length <= MONOSPACE_WIDTH)).toBe(true)
+    expect(wide).toHaveLength(3)
+
+    // Still two per line when they fit — the saving is not given up needlessly.
+    expect(placeLines(base)).toHaveLength(3)
+  })
+})
+
+/**
+ * The standings line, and the reason it does not simply use a space.
+ *
+ * A team name ending in digits — `Mbeumo Rhapsody` — put two digit groups beside each
+ * other, and Android's WhatsApp read the pair as a phone number: underlined, tap opens the
+ * dialer. It shipped because nothing here asserted what a standings line looks like, only
+ * whether the block was present, and the fault is invisible on desktop and in a unit test
+ * alike. Confirmed and fixed on a real handset 2026-09-07.
+ *
+ * The invariant is therefore about digits rather than about a colon: no rendered standings
+ * line may contain a digit, whitespace, digit. A future layout is free to use a different
+ * separator — a middle dot and a bullet both tested clean — but not to reintroduce the gap.
+ */
+describe('standings and the phone-number linkifier', () => {
+  const roster = (names: string[]) =>
+    names.map((entryName, i) => ({
+      entry: i + 1,
+      entryName,
+      playerName: `Player ${i + 1}`,
+      rank: i + 1,
+      lastRank: i + 2,
+      total: 193 - i,
+      eventTotal: 60 - i,
+      pending: false,
+    }))
+
+  const DIGIT_SPACE_DIGIT = /[0-9][ ]+[0-9]/
+
+  it('never puts a bare space between a team name and its score', () => {
+    const text = renderStandings(computeDigestStats(roster(['Mbeumo Rhapsody']), 3))
+    expect(text).not.toMatch(DIGIT_SPACE_DIGIT)
+    expect(text).toContain('Mbeumo Rhapsody: 193')
+  })
+
+  it('holds for every team name in a full league', () => {
+    const text = renderStandings(
+      computeDigestStats(
+        roster(['Mbeumo Rhapsody', 'Class of 92', 'Coming Home FC', 'Isak Newton', '2006']),
+        3,
+      ),
+    )
+    for (const line of text.split('\n')) expect(line).not.toMatch(DIGIT_SPACE_DIGIT)
   })
 })

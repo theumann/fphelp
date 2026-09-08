@@ -70,11 +70,27 @@ function movementMark(movement: number | null): string {
   return movement > 0 ? ` ▲${movement}` : ` ▼${Math.abs(movement)}`
 }
 
+/**
+ * Between the team name and its score, and it may not be a space.
+ *
+ * A team name ending in digits puts two digit groups next to each other — `Forza Italia
+ * 2006 193` — and Android's WhatsApp linkifies that as a phone number: underlined, and a
+ * tap opens the dialer. Confirmed on a real handset 2026-09-07, along with three things
+ * that do **not** fix it: an em dash (dashes appear in real numbers, so the linkifier
+ * accepts them), and wrapping the block in ``` fences — **code blocks are still
+ * linkified**, which also means the prize block is not immune by virtue of its fences.
+ *
+ * A colon is inert to the linkifier, reads naturally as a scoreboard, and costs three
+ * encoded characters a row — a third of what a middle dot or bullet would, both of which
+ * also tested clean if this ever needs to change for looks.
+ */
+const SCORE_SEPARATOR = ':'
+
 function standingLine(row: StandingRow): string {
   if (row.pending || row.rank === null) {
     return `– ${truncateName(row.entryName)} (${truncateName(row.playerName, 14)}) — new`
   }
-  return `${row.rank}. ${truncateName(row.entryName)} ${row.total}${movementMark(row.movement)}`
+  return `${row.rank}. ${truncateName(row.entryName)}${SCORE_SEPARATOR} ${row.total}${movementMark(row.movement)}`
 }
 
 export interface StandingsBlock {
@@ -160,8 +176,14 @@ export function prizeRows(prize: PrizeSummary): PrizeRow[] {
     for (const e of prize.expenses) rows.push({ label: e.label, cents: -e.amountCents })
   }
 
-  rows.push({ label: 'Each GW winner', cents: prize.gwWinnerCents })
-  rows.push({ label: 'Best GW of season', cents: prize.seasonBestGwCents })
+  /**
+   * Short labels, because the monospace block has a hard width and these are the two we
+   * control — an owner's expense label is whatever they typed. "GW winner" and "Best GW"
+   * read unambiguously under a "Prizes" heading, and the four characters they save are
+   * four an expense label gets to keep before it is truncated.
+   */
+  rows.push({ label: 'GW winner', cents: prize.gwWinnerCents })
+  rows.push({ label: 'Best GW', cents: prize.seasonBestGwCents })
   return rows
 }
 
@@ -173,6 +195,38 @@ export function ordinal(n: number): string {
 }
 
 /**
+ * The widest a line in the ``` block may be.
+ *
+ * **Measured, not chosen.** WhatsApp wraps its monospace block at phone width, and on
+ * 2026-09-07 a real digest proved where: rows of 28 characters wrapped — putting the label
+ * on one line and its amount on the next — while rows of 25 did not. 25 is therefore the
+ * widest known-good value rather than a guess, and it is a *phone* measurement, so it is
+ * the constraint even though desktop WhatsApp is wider.
+ *
+ * Everything the block renders is bounded by this, which is what stops an owner's expense
+ * label silently breaking the layout for their whole league.
+ */
+export const MONOSPACE_WIDTH = 25
+
+/** Between label and amount. Two spaces reads as a column; one reads as a typo. */
+const LABEL_GAP = '  '
+
+/** Between the two paid places on a line, wide enough to read as separate columns. */
+const PLACE_GAP = '   '
+
+/**
+ * Clips a label that will not fit, with an ellipsis so the clipping is visible.
+ *
+ * Visible matters: an owner who sees `Trophy engra…` knows to rename the expense in Setup,
+ * where a silently wrapped line just looks like the app is broken. The `…` is one column
+ * but nine characters once URL-encoded — irrelevant at the frequency this fires, and worth
+ * knowing before anyone uses it in a hot path.
+ */
+function truncateLabel(label: string, width: number): string {
+  return label.length <= width ? label : `${label.slice(0, Math.max(1, width - 1))}…`
+}
+
+/**
  * Right-aligns the amounts against the longest label.
  *
  * Only usable where the font is fixed-width — WhatsApp's ``` block and the plaintext
@@ -181,10 +235,22 @@ export function ordinal(n: number): string {
  */
 export function alignRows(rows: PrizeRow[], currency: string): string[] {
   const cells = rows.map((r) => ({ label: r.label, amount: formatCents(r.cents, currency) }))
-  const labelWidth = Math.max(...cells.map((c) => c.label.length))
   const amountWidth = Math.max(...cells.map((c) => c.amount.length))
 
-  return cells.map((c) => `${c.label.padEnd(labelWidth)}  ${c.amount.padStart(amountWidth)}`)
+  /**
+   * What is left for the label once the amounts and the gap have taken their share.
+   *
+   * `MONOSPACE_WIDTH` is the budget; the amounts are not negotiable, so the label absorbs
+   * the difference. A floor of 6 keeps something readable in the absurd case (a pot past
+   * eight figures) where the amounts alone eat the line — that row wraps, and a league
+   * with a $99,999,999 pot has better problems.
+   */
+  const available = Math.max(6, MONOSPACE_WIDTH - LABEL_GAP.length - amountWidth)
+  const labelWidth = Math.min(available, Math.max(...cells.map((c) => c.label.length)))
+
+  return cells.map(
+    (c) => `${truncateLabel(c.label, labelWidth).padEnd(labelWidth)}${LABEL_GAP}${c.amount.padStart(amountWidth)}`,
+  )
 }
 
 /**
@@ -207,9 +273,19 @@ export function placeLines(prize: PrizeSummary): string[] {
     (c) => `${c.place.padEnd(placeWidth)} ${c.amount.padStart(amountWidth)}`,
   )
 
+  /**
+   * Two per line only while two fit.
+   *
+   * The pairing exists to save budget, not because two columns are better — so when the
+   * amounts grow enough that a pair would exceed `MONOSPACE_WIDTH`, one per line is the
+   * correct answer rather than a wrapped mess. Same failure the labels above had: a layout
+   * that is right for the reference league and silently wrong for a richer one.
+   */
+  const perLine = 2 * (placeWidth + 1 + amountWidth) + PLACE_GAP.length <= MONOSPACE_WIDTH ? 2 : 1
+
   const lines: string[] = []
-  for (let i = 0; i < rendered.length; i += 2) {
-    lines.push(rendered.slice(i, i + 2).join('   ').trimEnd())
+  for (let i = 0; i < rendered.length; i += perLine) {
+    lines.push(rendered.slice(i, i + perLine).join(PLACE_GAP).trimEnd())
   }
   return lines
 }
