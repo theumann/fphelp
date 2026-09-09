@@ -25,6 +25,7 @@ export const dynamic = 'force-dynamic'
  */
 export default async function Home() {
   const session = await auth()
+  const contact = process.env.SUPPORT_EMAIL?.trim()
 
   if (session?.user?.id) {
     const leagues = await listLeaguesForUser(session.user.id)
@@ -59,10 +60,29 @@ export default async function Home() {
           Sign in
         </Link>
 
-        {/* Said plainly, because the alternative is someone requesting a link and being
-            refused with no idea why. Membership is granted by an owner, never by signing up. */}
+        {/*
+          Said plainly, because the alternative is someone requesting a link and being
+          refused with no idea why. Membership is granted by hand, never by signing up.
+
+          The invitation to write in appears only when `SUPPORT_EMAIL` is set, and the
+          sentence changes with it: promising a reply when no address is configured would
+          be worse than the flat refusal it replaces. Read per render, not at module load,
+          so setting the variable in Railway takes effect on a restart rather than needing
+          a rebuild.
+        */}
         <p className="text-sm text-faint">
-          For league owners. Access is granted by an existing owner. There is no sign-up.
+          {contact ? (
+            <>
+              For league owners. Access is granted by hand — there is no sign-up. If you
+              run a league and would like in, email{' '}
+              <a className="underline underline-offset-2 hover:text-foreground" href={`mailto:${contact}`}>
+                {contact}
+              </a>
+              .
+            </>
+          ) : (
+            <>For league owners. Access is granted by an existing owner. There is no sign-up.</>
+          )}
         </p>
       </div>
     </main>
