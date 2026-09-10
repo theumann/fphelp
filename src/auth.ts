@@ -4,6 +4,7 @@ import Resend from 'next-auth/providers/resend'
 
 import { db } from '@/db'
 import { accounts, sessions, users, verificationTokens } from '@/db/schema'
+import { rateLimit, SIGNIN_PER_EMAIL } from '@/lib/rate-limit'
 import { renderSignInEmail } from '@/lib/render/signin-email'
 
 /**
@@ -54,6 +55,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
        * printing sign-in links into logs.
        */
       async sendVerificationRequest(params) {
+        /**
+         * The backstop, and the only check that actually holds.
+         *
+         * `/signin` limits before calling `signIn`, which is where the readable message
+         * comes from — but a Server Action is not the only door. Auth.js publishes
+         * `/api/auth/signin/resend`, which accepts a POST directly, so a check that lived
+         * only in the form would be bypassed by anyone who opened the network tab.
+         *
+         * Here it is unavoidable: every magic link, from every entry path, is sent from
+         * this function. Refusing throws, which Auth.js turns into an error redirect —
+         * the message is less precise than the one `/signin` produces, and that is the
+         * correct trade for a path only an attacker takes.
+         *
+         * **A different key from `/signin`'s, deliberately.** Sharing one would make the
+         * form path count every attempt twice — once in the action, once here — so a
+         * legitimate owner would burn two of their five, while someone posting straight to
+         * the API burned one. Two keys means each path counts each attempt once, both
+         * stop at five, and the limits mean the same thing whichever door was used.
+         */
+        const { allowed } = rateLimit(
+          `signin:send:${params.identifier.trim().toLowerCase()}`,
+          SIGNIN_PER_EMAIL,
+        )
+        if (!allowed) {
+          throw new Error(`Rate limited: too many sign-in emails for ${params.identifier}`)
+        }
+
         if (!process.env.AUTH_RESEND_KEY) {
           if (process.env.NODE_ENV === 'production') {
             throw new Error('AUTH_RESEND_KEY is not set; cannot send sign-in emails.')

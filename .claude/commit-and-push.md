@@ -28,6 +28,7 @@ Check these explicitly when the diff touches the area — full explanations unde
 - `digests` unique per `(league_id, gameweek)`; `messages` deliberately not unique
 - Nothing treats a link tap, or anything else, as proof a message was delivered
 - **No implicit league creation.** Resolving a league is read-only — `findLeagueByFplId`, never a find-or-create. `ensureLeague` was deleted for this reason and the obvious instinct is to bring it back. Two things now depend on its absence: the league comes from a URL segment, so find-or-create lets anyone mint a league by typing a number; and the capture cron iterates the `leagues` table, so any row that appears is silently enrolled for capture
+- **Sign-in rate limiting counts in two places and must keep two keys.** `/signin`'s Server Action uses `signin:form:`, `sendVerificationRequest` uses `signin:send:`. Merging them, or reusing one key for both, silently halves the limit for everyone who uses the form while leaving it intact for anyone posting straight at `/api/auth/signin/resend` — the opposite of the intent. Also check the form's check still runs **before** the allowlist: moving it after turns a rate-limit response into an oracle for which addresses are real. Neither regression fails a test, because no test spans both layers
 - **The capture gate is evaluated once per run, before the league loop.** `bootstrap-static` and `event-status` are global. A change that moves the gate inside the per-league loop, or adds a per-league FPL call ahead of it, turns a skipped poll from 2 calls into 2 + N — against an API that blocked this deployment on 2026-09-01. It will not fail any test; the tests do not count calls
 
 If the diff touches the FPL client, also confirm nothing has quietly widened what a `null` from `lastFinishedGameweek()` is taken to mean.
@@ -55,7 +56,7 @@ In order:
 3. `npm test` — Vitest.
 4. `npm run build` — catches server/client boundary errors that lint and typecheck both miss, and it is what Railway will run. If it fails oddly right after editing `package.json` or config, delete `.next` and retry — a stale Turbopack cache produces misleading errors.
 
-**Stop any running `npm run dev` before starting these.** `NEXT_DIST_DIR` does not relocate `.next/dev/types/`, so a build and a dev server race on it and lose: `tsc` then fails inside generated code, and the dev server drops routes so every dynamic path 404s. Neither symptom points at the cause. Recovery is `Remove-Item -Recurse -Force .next` with the server stopped. It cost a debugging session on 2026-09-07 — see **Gotchas** in `CLAUDE.md`.
+**Stop any `npm run dev` running *for this repo* before starting these.** Another project's dev server is harmless — the collision is per-directory, and blocking on an unrelated one wastes the user's time. `NEXT_DIST_DIR` does not relocate `.next/dev/types/`, so a build and a dev server race on it and lose: `tsc` then fails inside generated code, and the dev server drops routes so every dynamic path 404s. Neither symptom points at the cause. Recovery is `Remove-Item -Recurse -Force .next` with the server stopped. It cost a debugging session on 2026-09-07 — see **Gotchas** in `CLAUDE.md`.
 
 ## After the push
 
