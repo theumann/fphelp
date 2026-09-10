@@ -80,3 +80,46 @@ test('a failed send lands back on the sign-in page, not on an API route', async 
   // Whatever the outcome, the page renders and says something about it.
   await expect(page.getByRole('button', { name: 'Email me a link' })).toBeVisible()
 })
+
+/**
+ * Rate limiting the sign-in form.
+ *
+ * Reachable here because the form-level check runs *before* `signIn`, so it fires in a
+ * suite that has no `AUTH_RESEND_KEY` and can never reach a successful send.
+ *
+ * **Two things make this test unusual, and both are properties of the thing under test.**
+ * The counters are in-memory and the suite runs one server process, so attempts persist
+ * across tests rather than resetting per test — hence a dedicated address nothing else
+ * uses. And every submission anywhere in this file also spends the per-IP budget of 20 an
+ * hour; at six here plus a handful elsewhere there is room, but a suite that grew a lot of
+ * sign-in tests would start failing in a way that looks like a bug in the page.
+ */
+test('refuses a sixth sign-in request for the same address', async ({ page }) => {
+  const flooded = 'flooded@example.test'
+
+  for (let i = 0; i < 5; i++) {
+    await page.goto('/signin')
+    await page.getByRole('textbox').fill(flooded)
+    await page.getByRole('button', { name: 'Email me a link' }).click()
+    await page.waitForURL(/\/signin/)
+    // Still the ordinary failure, not the limit: five are allowed through.
+    await expect(page.getByText(/Too many sign-in requests/)).toHaveCount(0)
+  }
+
+  await page.goto('/signin')
+  await page.getByRole('textbox').fill(flooded)
+  await page.getByRole('button', { name: 'Email me a link' }).click()
+
+  await expect(page.getByText(/Too many sign-in requests/)).toBeVisible()
+  // Phrased for the owner whose link a chat app ate, not for an attacker.
+  await expect(page.getByText(/Check your inbox/)).toBeVisible()
+})
+
+/** A different address has its own window — the limit is per address, not global. */
+test('does not limit a different address', async ({ page }) => {
+  await page.goto('/signin')
+  await page.getByRole('textbox').fill('someone-else@example.test')
+  await page.getByRole('button', { name: 'Email me a link' }).click()
+  await page.waitForURL(/\/signin/)
+  await expect(page.getByText(/Too many sign-in requests/)).toHaveCount(0)
+})

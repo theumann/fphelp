@@ -1,8 +1,10 @@
 import { AuthError } from 'next-auth'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 import { auth, signIn } from '@/auth'
 import { Logo } from '@/components/logo'
+import { rateLimit, SIGNIN_PER_EMAIL, SIGNIN_PER_IP } from '@/lib/rate-limit'
 
 /**
  * Auth.js sanitises errors before they reach the URL: only its `clientErrors` set
@@ -74,6 +76,18 @@ function signInErrors(): Record<string, { title: string; detail: string }> {
       detail:
         'If you administer a league here, ask a co-owner to add your email address from ' +
         'their Setup page.' + contactSentence(),
+    },
+    /**
+     * Not "you have been blocked". The overwhelmingly likely reader is an owner whose
+     * first link was eaten by a chat app's preview and who pressed the button a few more
+     * times — telling them they are rate limited invites a support message, where telling
+     * them to check their inbox and wait resolves it.
+     */
+    RateLimited: {
+      title: 'Too many sign-in requests',
+      detail:
+        'Several links have already been sent to that address. Check your inbox — including spam — and try again in a few minutes.' +
+        contactSentence(),
     },
     /**
      * Names the likely cause rather than only the rule.
@@ -180,9 +194,44 @@ export default async function SignInPage({
            *
            * Skipping the hop removes the dependency on which of those two Next chooses.
            */
+          const email = String(formData.get('email') ?? '')
+            .trim()
+            .toLowerCase()
+
+          /**
+           * Rate limited **before** `signIn`, and deliberately before the allowlist too.
+           *
+           * The allowlist callback refuses unknown addresses before any mail is sent, so
+           * limiting only after it would mean a rate-limit response could only ever be
+           * produced by a real owner's address — a second enumeration oracle on a page
+           * that already leaks enough. Applying it to every submission, known or not,
+           * leaks nothing new.
+           *
+           * The address is lower-cased for the key so `Owner@` and `owner@` share a
+           * bucket rather than being two free windows.
+           *
+           * The key is `signin:form:`, distinct from the `signin:send:` one the provider
+           * uses. Sharing a key would count every form submission twice — here and again
+           * in `sendVerificationRequest` — halving the limit for the only people who use
+           * the form, which is everyone legitimate.
+           *
+           * This is the message; `sendVerificationRequest` in `src/auth.ts` is the
+           * guarantee. A Server Action is not the only door — Auth.js's own
+           * `/api/auth/signin/resend` accepts a POST — so a check here alone would be
+           * bypassable by anyone who read the network tab.
+           */
+          const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+
+          const byEmail = rateLimit(`signin:form:${email}`, SIGNIN_PER_EMAIL)
+          const byIp = rateLimit(`signin:ip:${ip}`, SIGNIN_PER_IP)
+
+          if (!byEmail.allowed || !byIp.allowed) {
+            redirect('/signin?error=RateLimited')
+          }
+
           try {
             await signIn('resend', {
-              email: String(formData.get('email') ?? ''),
+              email,
               redirectTo: '/send',
               redirect: false,
             })
