@@ -397,11 +397,13 @@ The FPL API sits behind Cloudflare and rejects many datacenter IPs.
 
 **✅ Recovered the same day by redeploying**, which brought the container up on `152.55.177.118`; all four endpoints returned `200` with `application/json` within two minutes.
 
-**✅ Still reachable after the next deploy**, later the same day, from `162.220.232.8` — a **different `/16` again**. Three samples, three addresses, one per container.
+**✅ Still reachable after the next deploy**, later the same day, from `162.220.232.8` — a **different `/16` again**.
+
+**✅ And after every deploy since**, through 2026-09-09: `152.55.177.10`, then `13.52.96.11` — the latter back in the same AWS range family as the August address. **Six addresses observed, one per container, one of them blocked.** Five consecutive good draws after the bad one is more consistent with one unlucky address than with anything systematic about Railway.
 
 Five things that record is worth keeping for:
 
-- **The egress address changes on every deploy, and reputation follows the address rather than the range.** The blocked and recovered addresses were 228 apart in one `/16`, which briefly looked like a single NAT pool being scored address by address — then the next deploy landed in `162.220.0.0/16` instead, so the pool is wider than that and spans ranges. What all three samples agree on is the part that matters: **a redeploy is a reroll, not a fix.** It cleared the block in two minutes and buys nothing durable, because the next deploy draws again and can land on a bad address with no code change involved. Do not read any range as safe or unsafe; there are three data points and they only support "it moves".
+- **The egress address changes on every deploy, and reputation follows the address rather than the range.** The blocked and recovered addresses were 228 apart in one `/16`, which briefly looked like a single NAT pool being scored address by address — then the next deploy landed in `162.220.0.0/16` instead, so the pool is wider than that and spans ranges. What every sample agrees on is the part that matters: **a redeploy is a reroll, not a fix.** It cleared the block in two minutes and buys nothing durable, because the next deploy draws again and can land on a bad address with no code change involved. Do not read any range as safe or unsafe — `13.x` has now appeared on both sides of the block, months apart. The data supports "it moves" and nothing finer.
 - **It began with a redeploy, not with a code change.** The trigger was merging a docs-only PR (`.gitignore` plus two markdown files), which redeployed both services; the app came back on a different egress IP than the one verified in August. Strictly this is inference — the egress IP from the hour before that merge was never captured, so what is *proven* is that the two recorded IPs differ and that the failures start there. It is still the reading to reach for first, because this is the failure mode that looks most like "the last change broke it" and is least related to it. **Suspect the IP before the diff.**
 - **`/api/egress-check` is what made this a ten-minute diagnosis.** It was described in its own header as temporary, to be deleted "once the answer is settled". The answer is not settled and this event is the argument for keeping it: it separates "blocked" from "FPL is down" from "our code broke" in one request, from outside, with no deploy. **It is token-guarded as of 2026-09-07**, on the same `JOBS_TOKEN` as the capture job — it was open until the app was about to be linked publicly, and an open version discloses the egress IP and lets a stranger make this server fire four FPL requests per call, which is a lever on the very reputation that decides whether the app works. Call it with `-H "authorization: Bearer $JOBS_TOKEN"`.
 - **The build is green throughout.** Nothing in the build calls FPL, so a total loss of API access is invisible to the deploy and to Railway's health reporting.
@@ -410,7 +412,18 @@ Five things that record is worth keeping for:
 Two reasons this is not a closed question:
 
 - **Reputation moves on its own.** Cloudflare decisions are reputation-based and change without notice, and Railway's egress IP is shared, not contractually stable, and now demonstrably re-rolled on deploy. Expect recurrence.
-- **The mitigation therefore stays documented**, and has moved from prudent to owed: route FPL calls through an egress proxy with a stable, well-reputed IP. Changing host does not help — Fly.io is datacenter IPs too.
+- **The mitigation stays documented, and is conditional rather than owed.** Route FPL calls through an egress proxy with a stable, well-reputed IP. Changing host does not help — Fly.io is datacenter IPs too.
+
+**On the urgency, which this document overstated for a week.** The "owed work" framing was written on 2026-09-01 with the block fresh and the arithmetic from *before* phase B: roughly 20 calls per league per run, ~180 a window at ten leagues. Phase B then moved the gate in front of the league loop, so a poll with no settled gameweek costs **two** FPL calls whatever the league count. Ten leagues idle at ~192 calls a week rather than ~1,150, and the remaining exposure is one capturing run a week. At the current two leagues that is a polite volume, and the block was more plausibly a neighbour's doing than ours.
+
+Two further things the proxy is not: a cheap VPS is **still a datacentre IP**, so the win is *dedicated instead of shared* rather than *trusted* — and it adds a single point of failure to a path that today self-heals on redeploy. Residential proxying is the genuinely-trusted option and is not appropriate here.
+
+**Build it when either of these happens**, and not before:
+
+- **A block that recurs after a redeploy.** That means the reputation is following our traffic rather than the address, which is the only reading the reroll cannot fix.
+- **Enough leagues that a capturing run is hundreds of calls.** The gate bounds the idle rate, not the working one, and that scales linearly with leagues.
+
+Until then the mitigations that exist are the right size: the gate keeps idle volume at two calls a poll, `FplBlockedError` fails loudly rather than retrying into a wall, and `/api/egress-check` answers "is it us or the address" in one request.
 
 The FPL client should treat a sudden run of `403`s, or an HTML content type where JSON is expected, as *the block has started* rather than as a transient error — and surface it loudly instead of retrying into a wall.
 
