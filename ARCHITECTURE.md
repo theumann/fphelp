@@ -1,6 +1,6 @@
 # FPheLp — Architecture (MVP)
 
-Working name. See [ROADMAP.md](./ROADMAP.md) for feature scope and future items.
+Working name. See [ROADMAP.md](./ROADMAP.md) for feature scope and future items, and [SECURITY.md](./SECURITY.md) for what is defended, what is knowingly accepted, and what would change those answers.
 
 ## Overview
 
