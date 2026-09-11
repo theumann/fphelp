@@ -24,9 +24,69 @@ function lanOrigins(): string[] {
     .map((i) => i!.address);
 }
 
+/**
+ * Response headers, applied to every route.
+ *
+ * Defence in depth: none of these fixes a known hole, and one of them covers a scenario
+ * this app makes unusually plausible — see `X-Frame-Options` below. They were absent until
+ * 2026-09-11, when production served nothing but `Server` and `x-powered-by`.
+ *
+ * **No Content-Security-Policy, deliberately.** A CSP's main job is mitigating XSS, and
+ * the injection surface here is close to nil: React escapes everything, nothing uses
+ * `dangerouslySetInnerHTML`, and the one place raw HTML is built by hand (`renderEmail`)
+ * produces email, which no browser policy governs. Against that, a useful CSP on the App
+ * Router needs a nonce threaded through middleware — and one shipped with `unsafe-inline`
+ * instead would provide the appearance of protection and little else. There is also
+ * something specific to test first: the composer's `whatsapp://send?text=` link is a
+ * custom-scheme navigation, exactly the sort of thing a policy breaks quietly on one
+ * platform, and it is the app's core feature. Revisit if the app ever renders HTML it did
+ * not author.
+ */
+const securityHeaders = [
+  /**
+   * HTTPS only, for a year. No `preload` and no `includeSubDomains`: preloading is
+   * effectively irreversible — browsers ship the list, so removal takes months — and this
+   * is a small app that may yet want a plain-HTTP subdomain for something.
+   */
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+
+  /**
+   * The one with a real scenario rather than a theoretical one.
+   *
+   * Framed on a hostile page and overlaid, a signed-in owner can be made to click through
+   * to **Remove owner** or **Send email to N recipients** without seeing what they hit.
+   * Both are one click, consequential, and — for the send — explicitly the button in this
+   * app that cannot be taken back. Clickjacking is usually theatre; here it lands on the
+   * two controls that matter most.
+   *
+   * `DENY` rather than `SAMEORIGIN` because nothing here is ever framed, including by
+   * itself. It does mean the app can never be embedded anywhere, which is the intent.
+   */
+  { key: 'X-Frame-Options', value: 'DENY' },
+
+  /** Stops a browser second-guessing a declared content type. Free, and never wrong. */
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+
+  /**
+   * URLs here carry league IDs, and the send page links out to `wa.me`. There is no reason
+   * to hand a third party the path the owner was on.
+   */
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+
+  /** Switch off what the app never uses, so a future dependency cannot quietly start. */
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+]
+
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
+
+  /** Free version disclosure, and nothing depends on it. */
+  poweredByHeader: false,
+
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }]
+  },
 
   // Dev-only by construction: Next ignores this outside `next dev`.
   allowedDevOrigins: lanOrigins(),

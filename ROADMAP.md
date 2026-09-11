@@ -219,6 +219,9 @@ Preparation must also be idempotent: a `deliveries` row unique on `(league_id, g
 
 ## Known risks
 
+Security posture — what is enforced, what is knowingly accepted, and what would change those answers — lives in [SECURITY.md](./SECURITY.md).
+
+
 - **Unofficial API** — first-party but undocumented; no stability guarantee, no terms coverage, shapes shift between seasons
 - **Cloudflare IP blocking** — the FPL API rejects many datacenter IPs; this drives the hosting choice (see ARCHITECTURE.md). **No longer a risk but an observed event**: production was blocked on 2026-09-01 and recovered only by redeploying, which draws a new egress address. A redeploy is a reroll, not a fix — but six observed addresses, one blocked and five fine, point at one unlucky address rather than at Railway. The proxy is therefore **conditional work with stated triggers**, not owed work; ARCHITECTURE.md has them
 - **Deep-link behaviour varies** across iOS / Android / desktop

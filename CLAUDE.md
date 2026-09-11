@@ -2,7 +2,7 @@
 
 Automates a private FPL league owner's group communications — standings, results, money pot — instead of them posting by hand. Owner-only; league members never log in.
 
-See [ROADMAP.md](./ROADMAP.md) for scope and [ARCHITECTURE.md](./ARCHITECTURE.md) for design.
+See [ROADMAP.md](./ROADMAP.md) for scope, [ARCHITECTURE.md](./ARCHITECTURE.md) for design, and [SECURITY.md](./SECURITY.md) for what is defended and what is knowingly accepted.
 
 > **GW1 was scored on 25 Aug 2026, and the endpoint shapes in ARCHITECTURE.md are now confirmed against a finished gameweek** rather than taken on trust — the ⚠️ rows are cleared. What is *not* yet done is [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §4: no real payload has been recorded as a test fixture, so the suites still run on hand-built data. Read that file before writing code that depends on API shapes.
 
