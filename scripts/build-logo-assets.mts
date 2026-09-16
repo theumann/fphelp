@@ -8,6 +8,17 @@
  * Run with `npm run build:logo`. The outputs are committed — this is not a build step, and
  * nothing at runtime depends on it.
  *
+ * `sharp` is a **devDependency even though Next already depends on it**, and that is the
+ * point: this script only ever resolved it by reaching into Next's own tree, so a Next
+ * upgrade that dropped sharp or stopped hoisting it would break regenerating the logo with
+ * an error naming neither.
+ *
+ * Declaring it installs no second copy — npm dedupes it against Next's — but it did move
+ * the resolved version, and therefore Next's copy too. Nothing here depends on a specific
+ * sharp: the concern is the opposite direction, that Next's *runtime* image optimisation
+ * uses the same package. Regenerate and check `git status` after any change to this range;
+ * the outputs being byte-identical is what says the encoder still behaves the same.
+ *
  * Two problems it solves, both from the source being a wide wordmark on transparency:
  *
  * 1. **Dark mode.** "he" and the tagline are dark indigo (#2b1661). On the dark theme's
