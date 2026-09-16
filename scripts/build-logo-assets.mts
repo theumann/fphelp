@@ -8,6 +8,17 @@
  * Run with `npm run build:logo`. The outputs are committed — this is not a build step, and
  * nothing at runtime depends on it.
  *
+ * `sharp` is a **devDependency even though Next already depends on it**, and that is the
+ * point: this script only ever resolved it by reaching into Next's own tree, so a Next
+ * upgrade that dropped sharp or stopped hoisting it would break regenerating the logo with
+ * an error naming neither.
+ *
+ * Declaring it installs no second copy — npm dedupes it against Next's — but it did move
+ * the resolved version, and therefore Next's copy too. Nothing here depends on a specific
+ * sharp: the concern is the opposite direction, that Next's *runtime* image optimisation
+ * uses the same package. Regenerate and check `git status` after any change to this range;
+ * the outputs being byte-identical is what says the encoder still behaves the same.
+ *
  * Two problems it solves, both from the source being a wide wordmark on transparency:
  *
  * 1. **Dark mode.** "he" and the tagline are dark indigo (#2b1661). On the dark theme's
@@ -182,5 +193,88 @@ async function icon(size: number, file: string) {
 
 await icon(512, 'src/app/icon.png')
 await icon(180, 'src/app/apple-icon.png')
+
+// --- The link preview card ---------------------------------------------------
+/**
+ * The Open Graph card, at `src/app/opengraph-image.png`.
+ *
+ * Next picks that filename up by convention and emits `og:image` with its type and
+ * dimensions; `opengraph-image.alt.txt` beside it supplies the alt text. Generated here
+ * rather than by an `opengraph-image.tsx` using `ImageResponse`, so the card stays a
+ * committed artefact derived from the same source as every other image in the project —
+ * this script is the single place the logo is cropped and recoloured, and a runtime
+ * renderer would be a second one, with a font to load and a build step that can fail.
+ *
+ * 1200x630 is the size every consumer crops from: Facebook and WhatsApp use it as-is,
+ * and Twitter's `summary_large_image` letterboxes to 2:1 inside it. Nothing is placed
+ * within ~100px of an edge for that reason.
+ *
+ * **Light plate, deliberately.** A preview card is composited onto whatever background
+ * the chat app uses, so it cannot follow a colour scheme — and the dark wordmark variant
+ * on a light card would be the "FP LP" failure described at the top of this file, in the
+ * one image seen by people who have never used the app. `#fbfbfc` is `--background`
+ * light, matching the manifest's `background_color`.
+ */
+const CARD = { width: 1200, height: 630 }
+
+/**
+ * The landing page's gradient wash, flattened to an image.
+ *
+ * Same three brand stops as the `radial-gradient` in `src/app/page.tsx`, so the card and
+ * the page a click later look like one thing. Drawn as an SVG because sharp rasterises it
+ * directly; there is no CSS here to reuse.
+ *
+ * The opacities are **higher than the page's 0.12**, deliberately and not by much. That
+ * value is tuned for a full viewport sitting behind body text; a card is met at thumbnail
+ * size in a chat list, where the same wash disappears and leaves a white rectangle. These
+ * were raised until the tint registered small and then pulled back until the wordmark was
+ * still the only saturated thing on it — the rule in CLAUDE.md that the palette stays
+ * neutral so the mark carries the colour. An earlier pass at 0.30/0.22/0.12 broke it: the
+ * corners went pink and competed with the logo.
+ */
+const wash = Buffer.from(
+  `<svg width="${CARD.width}" height="${CARD.height}" xmlns="http://www.w3.org/2000/svg">
+     <defs>
+       <radialGradient id="w" cx="50%" cy="0%" r="75%">
+         <stop offset="0%" stop-color="#0399ec" stop-opacity="0.18" />
+         <stop offset="35%" stop-color="#2762e1" stop-opacity="0.13" />
+         <stop offset="70%" stop-color="#991ce1" stop-opacity="0.07" />
+         <stop offset="100%" stop-color="#991ce1" stop-opacity="0" />
+       </radialGradient>
+     </defs>
+     <rect width="100%" height="100%" fill="url(#w)" />
+   </svg>`,
+)
+
+// 760px leaves the wordmark large enough to read in a phone-sized preview while keeping
+// the margin above; the height follows the wordmark's own ratio rather than a guess.
+const cardLogoWidth = 760
+const cardLogoHeight = Math.round((cardLogoWidth * height) / width)
+
+const cardLogo = await sharp(trimmed)
+  .resize({ width: cardLogoWidth, withoutEnlargement: true })
+  .png()
+  .toBuffer()
+
+await sharp({
+  create: {
+    width: CARD.width,
+    height: CARD.height,
+    channels: 4,
+    background: { r: 0xfb, g: 0xfb, b: 0xfc, alpha: 1 },
+  },
+})
+  .composite([
+    { input: wash, top: 0, left: 0 },
+    {
+      input: cardLogo,
+      top: Math.round((CARD.height - cardLogoHeight) / 2),
+      left: Math.round((CARD.width - cardLogoWidth) / 2),
+    },
+  ])
+  .png({ compressionLevel: 9 })
+  .toFile('src/app/opengraph-image.png')
+
+console.log(`[logo] wrote src/app/opengraph-image.png (${CARD.width}x${CARD.height})`)
 
 console.log('[logo] done')
