@@ -13,8 +13,47 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  /**
+   * The origin every URL-based metadata field is resolved against, including the
+   * `opengraph-image.png` Next picks up from this directory. Without it, a relative
+   * metadata URL is a **build error**, not a silent fallback.
+   *
+   * A literal for the same reason the Sentry org and project are literals in
+   * `next.config.ts`: a public hostname is not a secret, and this file should state where
+   * the app lives rather than leaving that answer in a dashboard. `AUTH_URL` is not usable
+   * here — it is deliberately unset in local development, so reading it would make the
+   * value `undefined` on exactly the machine where the card is being worked on.
+   */
+  metadataBase: new URL("https://fphelp.app"),
   title: "FPheLp",
   description: "Fantasy league updates for the owner to send",
+  /**
+   * The link preview, for when the address is shared in a chat or linked from elsewhere.
+   *
+   * Wording is copied from `title`/`description` rather than reworded, so the manifest,
+   * the `<meta name="description">` and the card all say one thing. The image is not
+   * listed here: `opengraph-image.png` in this directory is a file convention, and Next
+   * emits `og:image` with its type and dimensions automatically.
+   */
+  openGraph: {
+    type: "website",
+    siteName: "FPheLp",
+    title: "FPheLp",
+    description: "Fantasy league updates for the owner to send",
+    url: "/",
+    locale: "en_GB",
+  },
+  /**
+   * No `twitter-image` file, deliberately. Twitter falls back to `og:image` when none is
+   * given, so a second copy of the same 1200x630 PNG would be bytes in the repo to say
+   * what the card already says. `summary_large_image` is what makes it render full-width
+   * instead of as a thumbnail.
+   */
+  twitter: {
+    card: "summary_large_image",
+    title: "FPheLp",
+    description: "Fantasy league updates for the owner to send",
+  },
   // `icon.png` and `apple-icon.png` in this directory are picked up by convention.
   applicationName: "FPheLp",
   /**
