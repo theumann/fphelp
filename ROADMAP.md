@@ -203,6 +203,40 @@ Deliberately after GW1. The first real scored gameweek is a one-time, unrepeatab
 
 **Non-technical, and easy to defer past the point where it is cheap:** hosting other people's leagues makes this a data controller for members' names and teams, and it sends them email. Negligible at five leagues; not at five hundred.
 
+### Phase 6 — open the source
+
+Making the repository public. Not a feature, and nothing waits on it: the app, the public URL and the link preview all work today with the repo private. **There is no clock on this phase**, which is the property that makes it safe to stop between any two steps below.
+
+**What blocks it is real people's data**, and it is more widespread than [SECURITY.md](./SECURITY.md)'s warning about `src/lib/fpl/recorded/*.json` describes. Inventoried 2026-09-22:
+
+- **The recorded payloads** hold 17 real names, 17 real team names, 17 FPL entry IDs, the `admin_entry`, and the league's ID, name and creation timestamp. One blob, touched by a single commit.
+- **The names leaked outward.** Three real people appear outside that directory — one of them in *shipped UI code* (`src/components/recipients-list.tsx`), not only in tests. Four real team names sit in `src/lib/render/blocks.test.ts` and `docs/GW1-VERIFICATION.md`; the real `admin_entry` is in `src/lib/fpl/roster.test.ts`; the league ID is in 13 files.
+- **History is worse than HEAD.** 151 of 156 commits contain the league ID, 144 the league name, 106 a real member's name. Three commit *messages* carry identifiers too, which matters because `git filter-repo --replace-text` rewrites file contents only — messages need `--replace-message`.
+- Clean, and worth recording as checked: no secrets, no `.env` ever committed, no real email addresses, no names in file paths.
+
+**The decisive constraint is GitHub's, not ours.** Rewriting this repository's history and force-pushing does *not* make it publishable: commits stay reachable under `refs/pull/N/head`, and there are 54 merged PRs. Making the repo public re-exposes every original commit by SHA, still linked from each PR page. Only a Support purge or deleting the repository removes them — and deleting it destroys the PR discussion, which is the part of the history that cannot be rewritten at all.
+
+**So the shape is: a new public repository, with this one kept private as the archive.** The public side gets all 156 commits rewritten, preserving messages, dates, authorship and merge topology; the private side keeps the PR conversations. The only cost is new SHAs and merge-commit messages referencing PR numbers that live in the archive — which is honest about how the project was built.
+
+**Anonymise the recordings, do not fabricate them.** Their entire job is proving the app can read what FPL actually sends; hand-authoring replacements would turn the change detector into a second `fixtures.ts` and quietly delete the reason `recorded.test.ts` exists. Substitute names, team names, entry IDs and the league ID while keeping the real payload's byte-shape. The constraints that must survive are in `recorded.test.ts` and are tighter than "it compiles" — 38 events, a settled `event-status` that opens the gate, every `last_rank` zero, no `id` key, `club_badge_src` present, a league average that differs from FPL's global one, and the percentage fields as **strings**.
+
+Steps, in order. Only the last is irreversible:
+
+- [ ] **6a — anonymise the payloads and the code.** The four recordings, the 13 league-ID sites, the three names, the four team names, the real `admin_entry`. Acceptance is the full suite green (`npm test` *and* `npm run e2e`, since the e2e suite runs on `fixtures.ts`), not a clean typecheck.
+- [ ] **6b — docs and policy.** Rewrite SECURITY.md's blockquote, which inverts, and its Reporting section, which assumes a private repo. Sanitise `docs/GW1-VERIFICATION.md` — 4 lines of 176, so **rewrite it rather than drop it**: it is the evidence behind a dozen of CLAUDE.md's gotchas, and re-deriving them means waiting for another season opener. Strip the Railway egress IP from it. Add LICENSE (MIT). Remove `DEFAULT_LEAGUE_ID` rather than substitute a fake one — a default pointing at a league that does not exist is a trap that looks like a working command.
+- [ ] **6c — rewrite history on a scratch clone.** `git filter-repo` with `--replace-text` **and** `--replace-message`. Verify the scrub across all 156 rewritten commits, not against HEAD. Nothing is pushed; the clone is disposable.
+- [ ] **6d — publish.** Create the public repository and push. **One-way.**
+
+**6a and 6b do not reduce exposure**, and should not be mistaken for partial mitigation: the history still holds everything until 6c and 6d. They are worth doing on their own merits regardless — CLAUDE.md carries "the recordings contain real managers' names" as a standing hazard, and anonymising retires it whether or not the repo is ever opened.
+
+**Decisions still open**, none of them needed before 6a except the first:
+
+- The substitute league ID.
+- Whether the public repository carries `main` only or all 19 branches.
+- Whether the commit author address stays as-is. All 156 commits are authored from a personal address, and publishing makes it permanently scrapable.
+
+Also worth re-reading at 6b: SECURITY.md's "Accepted, with reasons" list, through the lens of the code being public while the app is live. The conclusion on 2026-09-22 was that **nothing moves from acceptable to unacceptable** — the sign-in enumeration oracle is already observable by anyone who can load the form, and the in-memory rate limits' thresholds are discoverable by probing in minutes. The one change worth making is moving "rate limits to Postgres" out of the accepted list and into planned work, because an accepted risk that is now publicly documented reads better as a known to-do.
+
 ## Trigger condition
 
 `events[].finished` flips **before** bonus points are applied, and league tables are recalculated on a schedule separate from player points. Triggering on `finished` + `data_checked` alone can send a digest with stale standings.
