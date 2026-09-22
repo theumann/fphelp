@@ -269,7 +269,7 @@ Verified against live calls on 2026-08-03 (pre-season), then re-checked through 
 
 **`new_entries` is an object, not an array.** It carries the same pagination envelope as standings — `{ has_next, page, results }` — so it must be read as `new_entries.results` and paginated in its own right. (Corrected from the initial research, which had it as a bare `new_entries[]`.)
 
-**`new_entries` and `standings` have different element shapes.** Observed live on league 9999999 pre-season: 0 standings rows, 14 new entries. Combining them is a *normalisation*, not a union:
+**`new_entries` and `standings` have different element shapes.** Observed live on the reference league pre-season: 0 standings rows, 14 new entries. Combining them is a *normalisation*, not a union:
 
 | | `standings.results[]` | `new_entries.results[]` |
 |---|---|---|

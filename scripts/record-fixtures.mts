@@ -17,12 +17,16 @@
  * typing, so a field the client silently drops is still captured. It also refuses to run
  * with `FPL_FIXTURES=1`, which would otherwise record the fixtures on top of themselves.
  *
- * **The output contains real people's names** — every manager in the league, by name. The
- * repository is private and needs to stay that way. See docs/GW1-VERIFICATION.md §4.
+ * **The output is anonymised before it is written**, by `scripts/anonymise.mts`, so a
+ * recording never exists on disk carrying real managers' names. That step is part of this
+ * script rather than a thing to remember afterwards: a separate command is one someone
+ * forgets once, and the forgetting is only visible after the commit. Shape, types, key
+ * order and the pagination envelope all survive it — only identity is substituted.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { anonymiseBootstrap, anonymiseHistory, anonymiseStandings } from '../src/lib/fpl/anonymise'
 import { REFERENCE_LEAGUE } from '../src/lib/league-config'
 
 if (process.env.FPL_FIXTURES === '1') {
@@ -62,8 +66,10 @@ console.log(`\nRecording league ${leagueId} at ${new Date().toISOString()}\n`)
  * the difference between a reviewable diff and a megabyte of noise every season.
  */
 const bootstrap = (await get('/bootstrap-static/')) as { events: unknown[] }
-await save('bootstrap-static', { events: bootstrap.events })
+await save('bootstrap-static', anonymiseBootstrap({ events: bootstrap.events }))
 
+// Nothing in event-status identifies anyone — it is dates, flags and a status string — so
+// it is the one payload recorded exactly as received.
 await save('event-status', await get('/event-status/'))
 
 /**
@@ -76,10 +82,18 @@ await save('event-status', await get('/event-status/'))
 const standings = (await get(`/leagues-classic/${leagueId}/standings/?page_standings=1`)) as {
   standings: { results: { entry: number }[] }
 }
-await save('league-standings', standings)
 
+/**
+ * The real entry ID is read out **before** the standings are anonymised, because it is what
+ * the history endpoint is called with — anonymising first would send a synthetic ID to the
+ * live API and 404. It is used to fetch and then discarded; the history payload carries no
+ * entry ID of its own, and both files are written with the synthetic identity only.
+ */
 const entry = standings.standings.results[0]?.entry
 if (entry === undefined) throw new Error('No standings results — nothing to sample history from')
-await save('entry-history', await get(`/entry/${entry}/history/`))
+const history = await get(`/entry/${entry}/history/`)
+
+await save('league-standings', anonymiseStandings(standings).payload)
+await save('entry-history', anonymiseHistory(history))
 
 console.log(`\nWrote ${OUT}\n`)

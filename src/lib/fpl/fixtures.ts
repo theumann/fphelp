@@ -1,3 +1,4 @@
+import { SYNTHETIC_LEAGUE_ID, SYNTHETIC_LEAGUE_NAME } from '../fake-names'
 import type {
   BootstrapStatic,
   ClassicLeagueEntry,
@@ -33,15 +34,15 @@ import type {
  *   fake API serving a real league is the worst failure this file could have.
  */
 
-export const FIXTURE_LEAGUE_ID = 9999999
-export const FIXTURE_LEAGUE_NAME = "The Sunday League"
+export const FIXTURE_LEAGUE_ID = SYNTHETIC_LEAGUE_ID
+export const FIXTURE_LEAGUE_NAME = SYNTHETIC_LEAGUE_NAME
 
 /**
  * What this fake API calls a league.
  *
  * Every league ID gets the same 18 managers — the roster is what the fixture is for, and
  * duplicating it per league would buy nothing — but the *envelope* has to answer for the ID
- * it was asked about. Two leagues that both come back named "The Sunday League" would make
+ * it was asked about. Two leagues that both came back with the same name would make
  * the chooser at `/` a list of identical rows, and `syncLeagueName` would rename the second
  * league to the first's name, hiding a mix-up rather than revealing one.
  */
@@ -63,9 +64,9 @@ export const FIXTURE_PAGE_SIZE = 10
 
 /** Deliberately mixed: a tie at the top, a big riser, and a joiner with no scores yet. */
 const NAMED = [
-  { entry: 1000001, entry_name: 'Salah Bin Dover', player_name: 'Thierry Heumann' },
-  { entry: 1000002, entry_name: 'Haaland Oates', player_name: 'Reese Andersson' },
-  { entry: 1000003, entry_name: 'Sonny Delight', player_name: 'Indigo Mwangi' },
+  { entry: 1000001, entry_name: 'Salah Bin Dover', player_name: 'Cyril Fluck' },
+  { entry: 1000002, entry_name: 'Haaland Oates', player_name: 'Sam Okafor' },
+  { entry: 1000003, entry_name: 'Sonny Delight', player_name: 'Alex Nowak' },
 ]
 
 /**

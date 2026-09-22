@@ -24,7 +24,10 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 const TARGETS = {
   bootstrap: 'https://fantasy.premierleague.com/api/bootstrap-static/',
   eventStatus: 'https://fantasy.premierleague.com/api/event-status/',
-  standings: 'https://fantasy.premierleague.com/api/leagues-classic/9999999/standings/',
+  // League 314 is FPL's own global "Overall" league, which every entry is in. A real,
+  // public league belonging to nobody — so this diagnostic names no private league, and a
+  // synthetic ID is not an option here: it would 404 and report a block that is not one.
+  standings: 'https://fantasy.premierleague.com/api/leagues-classic/314/standings/',
   history: 'https://fantasy.premierleague.com/api/entry/1/history/',
 } as const
 

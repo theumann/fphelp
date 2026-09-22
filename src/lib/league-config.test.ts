@@ -3,13 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { parseLeagueId, parseLeagueSegment } from './league-config'
 
 describe('parseLeagueId', () => {
-  it('falls back to the reference league when unset', () => {
-    expect(parseLeagueId(undefined)).toBe(9999999)
+  /**
+   * There is no default league, and an unset value must not resolve to a guess — a script
+   * acting on a league nobody named is the failure this replaced.
+   */
+  it('throws when unset rather than falling back to a league', () => {
+    expect(() => parseLeagueId(undefined)).toThrow(/no default league/i)
   })
 
   it('treats an empty or blank value as unset', () => {
-    expect(parseLeagueId('')).toBe(9999999)
-    expect(parseLeagueId('   ')).toBe(9999999)
+    expect(() => parseLeagueId('')).toThrow(/no default league/i)
+    expect(() => parseLeagueId('   ')).toThrow(/no default league/i)
   })
 
   it('reads a configured numeric id', () => {

@@ -344,7 +344,7 @@ there is evidence anyone wants self-signup.
   **Done in phase A.** `seedLeague` takes `fplLeagueId` and can reuse an owner, and the
   fixture fetch echoes the ID it was asked about rather than always answering as the
   reference league. That last part matters more than it sounds: two leagues both returning
-  "The Sunday League" would make the chooser a list of identical rows, and `syncLeagueName`
+  the same name would make the chooser a list of identical rows, and `syncLeagueName`
   would rename the second to the first — hiding a mix-up instead of revealing one.
   The roster is still shared across every league ID, which is fine; it is what the fixture
   is for. Recorded fixtures stay single-league.

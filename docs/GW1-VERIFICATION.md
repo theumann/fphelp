@@ -2,7 +2,7 @@
 
 Everything here is blocked on **GW1 being scored** (deadline 2026-08-21). Pre-season the collections are empty, so these cannot be checked earlier.
 
-Reference league: **9999999** ("The Sunday League"). Pre-season 2026-08-05: 0 standings rows, 14 new entries. **As of 2026-08-25 GW1 is final** — 17 standings rows, 0 new entries, `sendGate()` open.
+Reference league: the owner's own private league, referred to here by role rather than by ID. Pre-season 2026-08-05: 0 standings rows, 14 new entries. **As of 2026-08-25 GW1 is final** — 17 standings rows, 0 new entries, `sendGate()` open.
 
 Snapshots behind the findings below, all via `npm run fpl:snapshot`: 21 Aug 18:09Z and 23:29Z (kickoff, then first day scored), 24 Aug 21:20Z and 23:54Z (still provisional), 25 Aug 14:14Z (final).
 
@@ -33,7 +33,7 @@ The second historical gap is now partly covered: the capture job upserts `manage
 
 Diff real payloads against the endpoint table in [ARCHITECTURE.md](../ARCHITECTURE.md#endpoint-reference). **All four rows are now confirmed and the ⚠️ marks are gone** — the findings below are what cleared them.
 
-- [x] **`standings.results[]` element fields** — confirmed live 2026-08-21 23:29Z, and the community-typed shape was **wrong in two ways**: there is no `id` (declared required, never sent — nothing read it, so nothing broke), and there is an undocumented `club_badge_src`, null for every manager here. Everything else matched. `last_rank` is `0` for every manager after GW1, so rank movement must read `0` as "no previous rank" rather than as a climb from position zero — it does.
+- [x] **`standings.results[]` element fields** — confirmed live 2026-08-21 23:29Z, and the community-typed shape was **wrong in two ways**: there is no `id` (declared required, never sent — nothing read it, so nothing broke), and there is an undocumented `club_badge_src`. **This was recorded here as "null for every manager", and that was wrong** — corrected 2026-09-22, when anonymising the payloads turned up six non-null badge URLs among the seventeen. Each embeds the manager's entry ID and a per-upload GUID and resolves to a real uploaded image, which made it the least obvious identifier in the payload: the field reads as decorative and is null often enough to look like it always is. Everything else matched. `last_rank` is `0` for every manager after GW1, so rank movement must read `0` as "no previous rank" rather than as a climb from position zero — it does.
 - [x] **`event-status.leagues`** — **confirmed `"Updated"` on 2026-08-25 14:14Z**, when GW1 went final. The last unverified thing the send trigger depended on; `sendGate()` returned `{gameweek: 1, statsReady: true, reason: "ready"}` on the same snapshot. Three values are now observed — `""`, `"Updating"` (2026-08-21 23:29Z) and `"Updated"` — so the field is not a two-state flag and a truthiness test would have opened the gate mid-gameweek. **One correction to the earlier note:** `""` is *not* "before a gameweek". It was the value through both 24 Aug snapshots with GW1 live and all 17 managers scored, so it means "not currently recalculating" and covers pre-season and a live-but-idle gameweek alike. An emptiness test would read a live gameweek as pre-season.
 - [x] **`status[].bonus_added`** — **seen flipping to `true` on 2026-08-25 14:14Z**, all four rows together with `finished`, `data_checked` and `leagues`. Everything moves at once; there is no partial state to handle. The field first existed 2026-08-21 18:09Z, and stayed `false` at 23:29Z on a match day whose games had finished and whose scores were in, and again through 24 Aug 21:20Z and 23:54Z — three days of `false` on visible scores. That gap between "scores landed" and "bonus applied" is the entire reason the gate exists, and it is now measured, not assumed: see §5 for the points it moved. `status[].points` has a third value to match — `""` → `"p"` while provisional → `"r"` once final.
 - [x] **`history.current[]` element fields** — confirmed 2026-08-21 23:29Z. Every field we map is present, plus several we do not use (`rank_sort`, `percentile_rank`, `overall_rank_percentage`, `bank`, `value`, `event_transfers`). `past[]` is populated for a returning manager — 7 seasons on the one sampled.
@@ -63,14 +63,14 @@ Also confirmed here, and the most valuable line in this document: the **league a
 - `past[].rank_percentage` and `current[].overall_rank_percentage` are **strings** (`"18"`, `"0.5"`, `"1"`), not numbers. They had been typed as `number` since the shape was copied from the community client. Nothing reads either, so nothing was broken — the type is now correct and pinned by a test.
 - `chips[]` has real contents on a scored entry (`{name: "bboost", time, event}`), where it was only ever `[]` before. Still typed `unknown[]` and still unread.
 
-**The recorded payloads contain every manager's real name.** The repository is private and must stay private.
+**The recorded payloads no longer contain anyone's real name.** `npm run fpl:record` anonymises them as it writes — see `scripts/anonymise.mts`. The shape is the real API's; the identities are invented.
 
 ## 5. Sanity-check the computed stats
 
 **Checked against the final GW1 numbers, 2026-08-25 14:14Z.**
 
 - [x] League average computed from `event_total` — **differs, every time.** Final: `leagueAverage()` **53.65** against a global `average_entry_score` of **50**. The two have never once matched across five snapshots (9 vs 12 on 21 Aug; 52.82 vs 36, then 52.82 vs 48 on 24 Aug), and the global figure moved by 12 points in a single evening while our league's held still — they are not the same quantity and cannot be substituted.
-- [x] GW winner matches the real top scorer — `Bald Fraud United`, 79, stable across all three post-scoring snapshots.
+- [x] GW winner matches the real top scorer — 79 points, stable across all three post-scoring snapshots.
 - [x] **The bonus gap, quantified.** League average **52.82 → 53.65** between the last provisional snapshot and the final one, with no fixtures left to play. That is roughly 0.8 points per manager arriving after the scores already looked complete, and it is enough to reorder a tight table. This is the concrete answer to "why not just gate on `finished`".
 - [ ] Rank movement from `last_rank` looks right — **still open, and cannot be checked until GW2.** GW1 answers the parenthetical only: `last_rank` is `0` for every manager when there is no prior gameweek, and `biggestRiser`/`biggestFaller` correctly render `—` rather than treating it as a climb from position zero.
 
@@ -83,7 +83,7 @@ Also confirmed here, and the most valuable line in this document: the **league a
 
 ## 6b. Clear pre-season test artifacts — before 21 Aug
 
-The league (9999999) is the real one, so its `managers`, `dues` and settings are real data and must be kept. What is *not* real is what pre-season testing wrote against **gameweek 1**:
+The reference league is the real one, so its `managers`, `dues` and settings are real data and must be kept. What is *not* real is what pre-season testing wrote against **gameweek 1**:
 
 **There is a script for this** — `npm run db:clear-digest`. It deletes the digest, its messages and its delivery rows for one gameweek of the reference league, and nothing else. Dry run by default; `--confirm` deletes; re-running is a no-op.
 

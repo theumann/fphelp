@@ -19,8 +19,8 @@ describe('parseRecipientList', () => {
 
   /** The form a paste out of any mail client actually takes. */
   it('reads a display name from `Name <email>`', () => {
-    expect(parseRecipientList('Reese Andersson <Steve@Example.com>').valid).toEqual([
-      { email: 'steve@example.com', name: 'Reese Andersson' },
+    expect(parseRecipientList('Sam Okafor <Sam@Example.com>').valid).toEqual([
+      { email: 'sam@example.com', name: 'Sam Okafor' },
     ])
   })
 
@@ -76,9 +76,9 @@ describe('parseRecipient', () => {
   })
 
   it('keeps the display name from a mail-client paste', () => {
-    expect(parseRecipient('Tracy Chen <tracy@example.com>')).toEqual({
-      email: 'tracy@example.com',
-      name: 'Tracy Chen',
+    expect(parseRecipient('Jordan Silva <jordan@example.com>')).toEqual({
+      email: 'jordan@example.com',
+      name: 'Jordan Silva',
     })
   })
 

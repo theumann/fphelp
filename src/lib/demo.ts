@@ -1,3 +1,4 @@
+import { FAKE_MANAGER_NAMES, FAKE_TEAM_NAMES } from './fake-names'
 import type { RosterManager } from './fpl/roster'
 
 /**
@@ -9,21 +10,8 @@ import type { RosterManager } from './fpl/roster'
  * truncation path — on a real device. Delete once GW1 has been scored.
  */
 export function demoRoster(count = 18): RosterManager[] {
-  const names = [
-    'Thierry Heumann', 'Cyril Fluck', 'Sam Okafor', 'Alex Nowak', 'Jordan Silva',
-    'Casey Lindqvist', 'Riley Fitzgerald', 'Morgan Achterberg', 'Taylor Brennan',
-    'Jamie Vasquez', 'Drew Kowalczyk', 'Quinn Papadopoulos', 'Reese Andersson',
-    'Avery Nakamura', 'Blake O’Sullivan', 'Charlie Bergström', 'Dana Whitfield',
-    'Emerson Castellanos', 'Frankie Delacroix', 'Georgie Ravensworth',
-  ]
-
-  const teams = [
-    'Coming Home FC', 'Bald Fraud United', 'Salah Good Men', 'Kane & Able',
-    'Haaland Oates', 'Sonny Delight', 'Trent Boyz', 'Ode to Joy',
-    'Bruno Mars Attacks', 'Saka Potatoes', 'Rice Rice Baby', 'Foden Paradise',
-    'Palmer Violence', 'Watkins Glen', 'Isak Newton', 'Mbeumo Rhapsody',
-    'Gordon Ramsay FC', 'Wirtz Case Scenario', 'Semenyo Say', 'Eze Does It',
-  ]
+  const names = FAKE_MANAGER_NAMES
+  const teams = FAKE_TEAM_NAMES
 
   return Array.from({ length: count }, (_, i) => ({
     entry: 1000 + i,

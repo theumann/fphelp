@@ -111,7 +111,7 @@ export interface Paged<T> {
   results: T[]
 }
 
-/** ✅ Confirmed live 2026-08-05 against league 9999999. */
+/** ✅ Confirmed live 2026-08-05 against the reference league. */
 export interface LeagueInfo {
   id: number
   name: string

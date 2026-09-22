@@ -33,7 +33,7 @@ Brand colours live in the logo, not in the tokens: the gradient runs cyan `#0399
 - `npm run fpl:record` — overwrites `src/lib/fpl/recorded/*.json` with the live API's current bytes, the fixtures `recorded.test.ts` checks the parsers against. **Only meaningful on a settled gameweek** — check `fpl:snapshot` reports `statsReady: true` first, or you bake a provisional payload in and the send gate's ready path stops being tested. Outputs are committed; `bootstrap-static` keeps only `events`, since the other ~1 MB is players and teams this app never reads
 - `npm run fpl:snapshot` — prints what the live FPL API says right now, through the app's own client: the send gate's verdict, both standings collections, and the computed league average against FPL's global one. Read-only, no database. This is how [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §2/§3/§5 get checked, and the moments worth checking do not repeat
 
-Deployment is Railway (project `fphelp`, workspace "Thierry Heumann's Projects"), with two services from this repo plus Postgres:
+Deployment is Railway (project `fphelp`, in the owner's personal workspace), with two services from this repo plus Postgres:
 
 | Service | What it is |
 | --- | --- |
@@ -55,7 +55,7 @@ The cron's Sentry check-in **upserts its own schedule** (`monitorConfig` in `scr
 - Digest computation is **pure functions over fetched JSON**. Keep fetching, computing, and rendering separate; the computation layer is where the tests live.
 - FPL API responses are captured as **recorded fixtures** for tests. The API is unofficial and shifts between seasons — the recordings are the change detector. `src/lib/fpl/recorded/*.json` holds the real bytes from a settled GW1 (25 Aug 2026), and `recorded.test.ts` parses them through the real functions on every run, so a shape change fails `npm test` instead of a send. Re-record with `npm run fpl:record`, and **read the diff before adapting the parsers — the diff is the finding**.
 - **The recordings and `fixtures.ts` cover different halves, and neither replaces the other.** Recordings prove the app can read what FPL actually sends; the hand-authored fixtures prove it renders correctly given cases the real league does not contain — a tie at the top, a manager with no scores yet, and standings past one page. The reference league is 17 managers on a single page, so `has_next` is false in every recorded payload and pagination is only exercised by the fixture, which pages at 10.
-- **The recordings contain real managers' names.** The repository is private and needs to stay that way.
+- **The recordings are anonymised as they are recorded**, by `scripts/anonymise.mts`, which `npm run fpl:record` calls before anything reaches disk. Names, team names, entry IDs, the league's ID and name, and the uploaded-badge URLs are substituted; shape, types, key order and the pagination envelope are not. The mapping is deterministic, so a re-record diffs against the last one on what the API changed rather than on which invented name each manager got. Never commit a recording taken any other way.
 - **End-to-end tests never call the real FPL API.** `FPL_FIXTURES=1` swaps the client's `fetchImpl` for a canned one. The suite also truncates every table, so it refuses any database that is not named `fphelp_e2e` **and** on a local host — the name alone would let a remote database with the right name through, and there is deliberately no override.
 - One template renders both the HTML email and the plaintext WhatsApp payload.
 
