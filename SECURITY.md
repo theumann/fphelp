@@ -7,11 +7,23 @@ something* — a roadmap says what is coming, and "user enumeration is an accept
 never arrives. Mechanisms are not repeated here: **Gotchas** in [CLAUDE.md](./CLAUDE.md)
 and [ARCHITECTURE.md](./ARCHITECTURE.md) hold those, and this file links to them.
 
-Last reviewed **2026-09-11**, before the app was linked publicly for the first time.
+Last reviewed **2026-09-22**, when the source was prepared for publication.
 
-> **The repository must stay private.** `src/lib/fpl/recorded/*.json` holds real managers'
-> names from a real league. That is a data disclosure the moment the repo is public, and it
-> is unrelated to anything else in this file.
+> **No real league's data belongs in this repository, and none is here.**
+> `src/lib/fpl/recorded/*.json` are real FPL API responses with the identities substituted:
+> names, team names, entry IDs, the league's ID and name, and the uploaded-badge URLs are
+> invented, while every key, type, null and pagination envelope is the API's own. The
+> substitution runs inside `npm run fpl:record` rather than beside it — see
+> `src/lib/fpl/anonymise.ts` — because a separate step is one somebody forgets once, and
+> the forgetting is only visible after the commit.
+>
+> This replaces an earlier note saying the repository had to stay private *because* those
+> payloads held seventeen real managers' names. They did. The warning was also incomplete:
+> the names had spread to the hand-authored fixtures, three test files and one shipped
+> component, and the least obvious identifier of all was `club_badge_src`, documented as
+> "null for every manager" and in fact a real, fetchable image URL for six of them. If you
+> add a fixture, assume the same: the identifier you miss is the one that does not look
+> like an identifier.
 
 ## What the app is, which decides what matters
 
@@ -56,7 +68,11 @@ These are known and deliberately not fixed. Each says what would change the answ
   being people you know personally.
 - **Rate-limit counters are in memory**, which assumes one container. Scale past one and
   each instance counts separately, multiplying the effective limit — it fails open rather
-  than shut. **Revisit if** the app is ever run with more than one instance.
+  than shut. **No longer merely accepted: moving them to Postgres is planned work** (see
+  ROADMAP.md). Publishing the source does not make this exploitable — the thresholds were
+  always discoverable by probing, and one container still counts correctly — but an
+  accepted risk that is now also publicly documented reads better as a to-do than as a
+  shrug. **Revisit immediately if** the app is ever run with more than one instance.
 - **No Content-Security-Policy.** Reasoning in `next.config.ts`: the injection surface is
   close to nil, and a useful policy needs a nonce threaded through middleware while a lazy
   one would be decoration. **Revisit if** the app ever renders HTML it did not author.
@@ -83,8 +99,28 @@ These are known and deliberately not fixed. Each says what would change the answ
   resilient to an FPL block, something else has to notice. See ARCHITECTURE.md
   "Egress and Cloudflare".
 
+## Does publishing the source change any of this?
+
+Reviewed line by line on 2026-09-22, with the code public and the app live. **Nothing above
+moves from acceptable to unacceptable**, for one reason that applies to most of it: every
+accepted item was already observable from outside. The sign-in form tells any visitor
+whether an address is an owner; the absence of a CSP is visible in the response headers;
+the rate limits' thresholds are findable by probing in minutes. Publishing saves an
+attacker reading time, not work they could not otherwise do.
+
+What publishing genuinely changes is the **shape of a mistake**, not the threat model. A
+secret committed by accident is now disclosed the moment it is pushed rather than at some
+later decision to open the repo, and a fixture added carelessly publishes whoever is in it.
+That is why the anonymiser runs inside the recording step and why the blockquote at the top
+of this file is written as a rule about fixtures rather than a rule about repository
+visibility.
+
 ## Reporting
 
-There is no bug-bounty and no security contact beyond the address on the landing page. If
-something here is wrong, it is wrong in a private repository serving a handful of fantasy
-football leagues — mail the operator and it will be read by the person who can fix it.
+There is no bug bounty, and no formal disclosure process. Mail the address on the landing
+page (`SUPPORT_EMAIL`, currently a forwarding alias) and it reaches the one person who can
+fix it. There is no SLA, and no expectation that a report gets a same-day answer: this is a
+side project serving a handful of fantasy football leagues, run by one person.
+
+If you have found something that discloses another person's data, say so in the first line
+and it will be prioritised over anything else here.

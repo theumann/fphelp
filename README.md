@@ -8,9 +8,15 @@ and taps. League members never log in.
 
 - [ROADMAP.md](./ROADMAP.md) — scope and phases
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — design and the reasoning behind it
+- [SECURITY.md](./SECURITY.md) — what is defended, what is knowingly accepted, and why
 - [CLAUDE.md](./CLAUDE.md) — conventions, and the gotchas that produce silently wrong output
-- [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) — what to check when the first
-  gameweek is scored
+- [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) — how the API's behaviour was
+  established during the first scored gameweek, kept as the evidence behind the gotchas
+
+MIT licensed — see [LICENSE](./LICENSE). It is a personal project rather than a product:
+there is no support, no release cadence, and no expectation that it runs anywhere but the
+one deployment it was written for. The fixtures under `src/lib/fpl/recorded/` are real FPL
+API responses with the identities replaced by invented ones; see [SECURITY.md](./SECURITY.md).
 
 ## Local development
 

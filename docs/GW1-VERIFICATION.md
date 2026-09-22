@@ -1,5 +1,12 @@
 # GW1 verification checklist — run after 21 Aug 2026
 
+**A historical record, kept deliberately.** Most of this is done and its boxes are ticked;
+it is retained because it is the evidence behind a dozen of the gotchas in
+[CLAUDE.md](../CLAUDE.md) — the three-state `event-status.leagues`, the measured 52.82 →
+53.65 bonus gap, the `*/40` cron that never meant "every 40 minutes". The first gameweek of
+a season is a one-time, unrepeatable event, so these findings cannot be re-derived without
+waiting for another one. Read it as "how we know", not as a to-do list.
+
 Everything here is blocked on **GW1 being scored** (deadline 2026-08-21). Pre-season the collections are empty, so these cannot be checked earlier.
 
 Reference league: the owner's own private league, referred to here by role rather than by ID. Pre-season 2026-08-05: 0 standings rows, 14 new entries. **As of 2026-08-25 GW1 is final** — 17 standings rows, 0 new entries, `sendGate()` open.
