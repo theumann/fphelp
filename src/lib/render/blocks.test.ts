@@ -239,7 +239,7 @@ describe('monospace width', () => {
 /**
  * The standings line, and the reason it does not simply use a space.
  *
- * A team name ending in digits — `Mbeumo Rhapsody` — put two digit groups beside each
+ * A team name ending in digits — `Vardy Party 2006` — put two digit groups beside each
  * other, and Android's WhatsApp read the pair as a phone number: underlined, tap opens the
  * dialer. It shipped because nothing here asserted what a standings line looks like, only
  * whether the block was present, and the fault is invisible on desktop and in a unit test
@@ -265,15 +265,15 @@ describe('standings and the phone-number linkifier', () => {
   const DIGIT_SPACE_DIGIT = /[0-9][ ]+[0-9]/
 
   it('never puts a bare space between a team name and its score', () => {
-    const text = renderStandings(computeDigestStats(roster(['Mbeumo Rhapsody']), 3))
+    const text = renderStandings(computeDigestStats(roster(['Vardy Party 2006']), 3))
     expect(text).not.toMatch(DIGIT_SPACE_DIGIT)
-    expect(text).toContain('Mbeumo Rhapsody: 193')
+    expect(text).toContain('Vardy Party 2006: 193')
   })
 
   it('holds for every team name in a full league', () => {
     const text = renderStandings(
       computeDigestStats(
-        roster(['Mbeumo Rhapsody', 'Class of 92', 'Coming Home FC', 'Isak Newton', '2006']),
+        roster(['Vardy Party 2006', 'Class of 92', 'Isak Newton', 'MbeumoFC', '2006']),
         3,
       ),
     )

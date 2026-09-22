@@ -3,7 +3,7 @@
     "admin_entry": 8000002,
     "closed": false,
     "code_privacy": "p",
-    "created": "2026-07-23T17:32:06.465586Z",
+    "created": "2026-07-01T12:00:00.000000Z",
     "cup_league": null,
     "has_cup": true,
     "id": 9999999,
@@ -57,7 +57,7 @@
         "entry_name": "Watkins Glen",
         "event_total": 67,
         "last_rank": 0,
-        "player_name": "Thierry Heumann",
+        "player_name": "Taylor Brennan",
         "rank": 3,
         "rank_sort": 4,
         "total": 67

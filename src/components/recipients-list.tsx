@@ -118,7 +118,7 @@ export function RecipientsList({
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
               rows={3}
-              placeholder="steve@example.com, Indigo Mwangi <victor@example.com>"
+              placeholder="sam@example.com, Alex Nowak <alex@example.com>"
               className={`${inputClass} text-sm`}
             />
             <p className="text-xs leading-relaxed text-muted">

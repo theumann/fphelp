@@ -222,12 +222,12 @@ test.describe('email recipients', () => {
 
     await ownerPage
       .getByLabel('Add addresses')
-      .fill('steve@example.test, Indigo Mwangi <victor@example.test>, not-an-address')
+      .fill('sam@example.test, Alex Nowak <alex@example.test>, not-an-address')
     await ownerPage.getByRole('button', { name: 'Add to list' }).click()
 
     await expect(ownerPage.getByText('Added 2.')).toBeVisible()
     await expect(ownerPage.getByText(/Couldn't read 1/)).toBeVisible()
-    await expect(ownerPage.getByText('Indigo Mwangi —')).toBeVisible()
+    await expect(ownerPage.getByText('Alex Nowak —')).toBeVisible()
   })
 })
 

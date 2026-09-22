@@ -6,7 +6,7 @@ import type { ClassicLeagueStandings } from './types'
  * `standings.results` and `new_entries.results` have DIFFERENT shapes — split name
  * fields and no scores on new entries — so combining them is a normalisation, not a
  * union. Managers who have joined but aren't yet in standings have no scores at all;
- * pre-season that is the entire league (league 9999999: 0 standings, 14 new entries).
+ * pre-season that is the entire league (the reference league: 0 standings, 14 new entries).
  */
 export interface RosterManager {
   entry: number

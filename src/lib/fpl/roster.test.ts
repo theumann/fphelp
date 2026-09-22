@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { SYNTHETIC_LEAGUE_ID, SYNTHETIC_LEAGUE_NAME } from '../fake-names'
 import { buildRoster, leagueAverage } from './roster'
 import type { ClassicLeagueEntry, ClassicLeagueStandings, NewLeagueEntry } from './types'
 
@@ -32,9 +33,9 @@ const league = (
   newEntries: NewLeagueEntry[] = [],
 ): ClassicLeagueStandings => ({
   league: {
-    id: 9999999,
-    name: "The Sunday League",
-    created: '2026-07-23T17:32:06Z',
+    id: SYNTHETIC_LEAGUE_ID,
+    name: SYNTHETIC_LEAGUE_NAME,
+    created: '2026-07-01T12:00:00Z',
     closed: false,
     start_event: 1,
     league_type: 'x',
@@ -47,7 +48,7 @@ const league = (
 })
 
 describe('buildRoster', () => {
-  // The real pre-season state of league 9999999: everyone is a new entry and the
+  // The real pre-season state of the reference league: everyone is a new entry and the
   // standings are empty. Building only from standings would render an empty league.
   it('includes managers who exist only in new_entries', () => {
     const roster = buildRoster(league([], [newEntry({ entry: 1 }), newEntry({ entry: 2 })]))
