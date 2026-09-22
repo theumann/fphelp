@@ -33,6 +33,12 @@ npm run dev
 Without `AUTH_RESEND_KEY`, sign-in links are printed to the server console instead of
 emailed, so local development works before a domain is verified.
 
+**Run the dev server once before reaching for `tsc`.** On a fresh clone `npx tsc --noEmit`
+fails with `TS2304: Cannot find name 'LayoutProps'`, which looks like broken code and is
+not. Next generates the route types — `LayoutProps`, `PageProps` — into `.next/types`,
+which `tsconfig.json` includes; they do not exist until `next dev` or `next build` has run
+once. `npm test` and `npm run lint` need none of this and pass on a bare clone.
+
 You will also need a `users` row to sign in at all — access is allowlist-based and there is
 no self-signup. Set `BOOTSTRAP_OWNER_EMAIL` and run `npm run db:bootstrap`.
 
