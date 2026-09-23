@@ -4,7 +4,7 @@ Automates a private FPL league owner's group communications — standings, resul
 
 See [ROADMAP.md](./ROADMAP.md) for scope, [ARCHITECTURE.md](./ARCHITECTURE.md) for design, and [SECURITY.md](./SECURITY.md) for what is defended and what is knowingly accepted.
 
-> **GW1 was scored on 25 Aug 2026, and the endpoint shapes in ARCHITECTURE.md are now confirmed against a finished gameweek** rather than taken on trust — the ⚠️ rows are cleared. What is *not* yet done is [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) §4: no real payload has been recorded as a test fixture, so the suites still run on hand-built data. Read that file before writing code that depends on API shapes.
+> **The endpoint shapes in ARCHITECTURE.md are confirmed against a finished gameweek**, not taken on trust: GW1 was scored on 25 Aug 2026 and its payloads are recorded in `src/lib/fpl/recorded/`, anonymised as they were recorded. `recorded.test.ts` parses them through the real functions on every `npm test`, so a shape change fails the suite instead of a send. Read [docs/GW1-VERIFICATION.md](./docs/GW1-VERIFICATION.md) before writing code that depends on API shapes — it is the evidence behind the gotchas below, and a season opener does not come round again.
 
 ## Stack
 
