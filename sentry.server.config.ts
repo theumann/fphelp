@@ -45,6 +45,10 @@ if (dsn) {
       // Next's own navigation control-flow, thrown deliberately and caught by the framework.
       'NEXT_REDIRECT',
       'NEXT_NOT_FOUND',
+      // Node's `abortIncoming`: the client hung up before its request body arrived. Nothing
+      // of ours failed. First seen 18 Oct 2026 from a scanner POSTing to `/` with rotating
+      // Chrome user-agents; a real owner closing a tab mid-action produces it too.
+      /^aborted$/,
     ],
 
     /**
