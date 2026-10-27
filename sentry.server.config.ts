@@ -51,6 +51,8 @@ if (dsn) {
       /^aborted$/,
     ],
 
+    beforeSend: (event) => (isActionProbeOnRoot(event) ? null : event),
+
     /**
      * Never send the request body or headers. A Server Action's payload can carry the
      * digest text and, on the email path, the league's recipient addresses — none of which
@@ -59,4 +61,26 @@ if (dsn) {
      */
     sendDefaultPii: false,
   })
+}
+
+/**
+ * A POST to `/` carrying a `Next-Action` ID this build never produced. Nothing `/` renders
+ * calls a Server Action — signed out it is a link and a mailto, signed in it redirects
+ * before rendering — so no browser of ours can send one; only something building the
+ * request by hand can. Seen a few times a day from 25 Oct 2026, with no deploy within a
+ * week to explain a stale tab, and Next has already answered it with a 404.
+ *
+ * Filtered on the path rather than through `ignoreErrors` on purpose. The same message on
+ * `/l/<id>/setup` or `/send` is an owner whose tab outlived a deploy, and their Save really
+ * did fail — that one should still alert.
+ */
+function isActionProbeOnRoot(event: Sentry.ErrorEvent): boolean {
+  const messages = [event.message, ...(event.exception?.values ?? []).map((e) => e.value)]
+  if (!messages.some((m) => m?.startsWith('Failed to find Server Action'))) return false
+
+  try {
+    return new URL(event.request?.url ?? '').pathname === '/'
+  } catch {
+    return false
+  }
 }
