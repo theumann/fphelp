@@ -50,6 +50,24 @@ export function lastFinishedGameweek(bootstrap: BootstrapStatic): number | null 
 }
 
 /**
+ * The last gameweek whose scores are final, or 0 when none is.
+ *
+ * The ledger's cut-off. It is not "the newest gameweek with stored history": a capture
+ * retried while the next gameweek is live stores that gameweek's provisional rows too,
+ * because `current[]` returns everything up to now, and paying a gameweek prize on them
+ * would name a winner before bonus points have landed.
+ *
+ * The newest finished gameweek counts only once it passes the same gate as a digest. Until
+ * then the one before it is the last settled, which it must already have been for this one
+ * to have started.
+ */
+export function settledGameweek(bootstrap: BootstrapStatic, status: EventStatus): number {
+  const finished = lastFinishedGameweek(bootstrap)
+  if (finished === null) return 0
+  return isGameweekReady(bootstrap, status, finished).ready ? finished : finished - 1
+}
+
+/**
  * The gameweek currently being played, or `null` between them.
  *
  * Exists to tell two states apart that `lastFinishedGameweek() === null` collapses into

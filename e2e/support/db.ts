@@ -168,3 +168,23 @@ export async function listOwnerEmails(p: Pool, leagueId: string): Promise<string
   )
   return rows.map((r) => r.email)
 }
+
+/**
+ * Stores captured gameweek scores, as the capture job would.
+ *
+ * Only the fields the ledger reads are meaningful; `total_points` is required by the
+ * schema and set equal to `points`, which nothing on these pages checks.
+ */
+export async function seedGameweekScores(
+  p: Pool,
+  leagueId: string,
+  rows: { entry: number; gameweek: number; points: number }[],
+) {
+  for (const r of rows) {
+    await p.query(
+      `INSERT INTO manager_gw_history (league_id, entry, gameweek, points, total_points)
+         VALUES ($1, $2, $3, $4, $4)`,
+      [leagueId, r.entry, r.gameweek, r.points],
+    )
+  }
+}

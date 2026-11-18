@@ -6,6 +6,7 @@ import {
   lastFinishedGameweek,
   liveGameweek,
   sendGate,
+  settledGameweek,
 } from './gameweek'
 import type { BootstrapStatic, EventStatus, FplEvent } from './types'
 
@@ -209,5 +210,33 @@ describe('sendGate', () => {
     }
 
     expect(sendGate(bootstrap, settled)).toEqual({ gameweek: 1, statsReady: true, reason: 'ready' })
+  })
+})
+
+describe('settledGameweek', () => {
+  const season = (finishedThrough: number, checkedThrough = finishedThrough): BootstrapStatic => ({
+    events: Array.from({ length: 38 }, (_, i) =>
+      event({ id: i + 1, finished: i < finishedThrough, data_checked: i < checkedThrough }),
+    ),
+  })
+
+  it('is 0 before anything has finished', () => {
+    expect(settledGameweek(season(0), status({ status: [], leagues: '' }))).toBe(0)
+  })
+
+  it('is the newest finished gameweek once it passes the gate', () => {
+    expect(settledGameweek(season(10), status())).toBe(10)
+  })
+
+  it('falls back one gameweek while the newest is still waiting on bonus', () => {
+    const pending = status({
+      status: [{ date: '2026-11-08', event: 10, bonus_added: false, points: 'p' }],
+      leagues: 'Updating',
+    })
+    expect(settledGameweek(season(10), pending)).toBe(9)
+  })
+
+  it('falls back one gameweek until data_checked flips, even with leagues updated', () => {
+    expect(settledGameweek(season(10, 9), status())).toBe(9)
   })
 })
