@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm'
 
+import type { GameweekScore } from '@/lib/digest/ledger'
 import type { DigestStats } from '@/lib/digest/stats'
 import type { HistoryRow } from '@/lib/fpl/history'
 import type { RosterManager } from '@/lib/fpl/roster'
@@ -247,6 +248,44 @@ export async function capturedEntryCount(leagueId: string, gameweek: number): Pr
     .where(and(eq(managerGwHistory.leagueId, leagueId), eq(managerGwHistory.gameweek, gameweek)))
 
   return row?.count ?? 0
+}
+
+/**
+ * Every captured gameweek score in the league — the winnings ledger's input.
+ *
+ * Read from stored history rather than live standings because standings only ever show the
+ * latest gameweek, and only for managers still in the league. A manager who won GW3 and
+ * left in GW8 is owed that prize; this table is the only place it is still recorded.
+ */
+export async function listGameweekScores(leagueId: string): Promise<GameweekScore[]> {
+  return db
+    .select({
+      entry: managerGwHistory.entry,
+      gameweek: managerGwHistory.gameweek,
+      points: managerGwHistory.points,
+    })
+    .from(managerGwHistory)
+    .where(eq(managerGwHistory.leagueId, leagueId))
+}
+
+/**
+ * Names for every manager ever captured in the league, including those who have left.
+ *
+ * The ledger can name a winner who is no longer in standings, and live standings cannot.
+ */
+export async function listManagerNames(
+  leagueId: string,
+): Promise<Map<number, { entryName: string; playerName: string }>> {
+  const rows = await db
+    .select({
+      entry: managers.entry,
+      entryName: managers.entryName,
+      playerName: managers.playerName,
+    })
+    .from(managers)
+    .where(eq(managers.leagueId, leagueId))
+
+  return new Map(rows.map((r) => [r.entry, { entryName: r.entryName, playerName: r.playerName }]))
 }
 
 /**

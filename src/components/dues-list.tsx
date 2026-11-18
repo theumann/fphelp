@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 
 import { setPaidAction } from '@/app/dues/actions'
 import { formatCents } from '@/lib/digest/money'
@@ -22,6 +22,12 @@ interface Props {
   /** Null until the league sets a pot — the collected total is still worth showing. */
   potCents: number | null
   currency: string
+  /**
+   * The winnings ledger, rendered by the page. A slot rather than a sibling because this
+   * component draws the page's column, and a second column beside it would double the
+   * gutters on a phone.
+   */
+  winnings?: ReactNode
 }
 
 export function DuesList({
@@ -32,6 +38,7 @@ export function DuesList({
   entryFeeCents,
   potCents,
   currency,
+  winnings,
 }: Props) {
   const [paid, setPaid] = useState<Record<number, boolean>>(initialPaid)
   const [saving, setSaving] = useState<number | null>(null)
@@ -126,10 +133,13 @@ export function DuesList({
         ))}
       </ul>
 
+      {winnings}
+
       <p className="text-xs text-neutral-500">
-        Tracks money coming in. Prize money owed out is computed from the final standings.
+        Ticks track money coming in. Winnings are computed from the scores, so there is
+        nothing to enter.
         <br />
-        Paying it out isn&apos;t tracked in the current app&apos;s version.
+        Paying winnings out isn&apos;t tracked in the current app&apos;s version.
       </p>
     </div>
   )
