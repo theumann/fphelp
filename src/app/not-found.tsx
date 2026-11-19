@@ -20,7 +20,7 @@ export default function NotFound() {
       <Logo width={200} />
 
       <div className="flex flex-col gap-2">
-        <h1 className="text-lg font-semibold tracking-tight">Nothing here</h1>
+        <h1 className="heading text-2xl">Nothing here</h1>
         <p className="max-w-sm text-balance text-sm leading-relaxed text-muted">
           That page doesn&apos;t exist. If you followed a link to a league, the ID in it
           may be wrong — or the league may never have been set up here.

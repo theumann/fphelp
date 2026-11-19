@@ -53,6 +53,17 @@ describe('composeMessage', () => {
     expect(text.trimEnd().endsWith('League Admin')).toBe(true)
   })
 
+  it('orders the blocks as the email does: gameweek, standings, prizes', () => {
+    const { text } = composeMessage({ body: 'Note.', blocks: allBlocks, stats: stats(6), prize })
+
+    const gw = text.indexOf('*Gameweek')
+    const standings = text.indexOf('*Standings*')
+    const prizes = text.indexOf('*Prizes*')
+    expect(gw).toBeGreaterThan(-1)
+    expect(standings).toBeGreaterThan(gw)
+    expect(prizes).toBeGreaterThan(standings)
+  })
+
   it('includes only the blocks that are selected', () => {
     const { text } = composeMessage({
       body: 'Short note.',

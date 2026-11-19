@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 
-import { dependsOnGameweek, type BlockSelection } from '@/lib/render/blocks'
+import type { BlockSelection } from '@/lib/render/blocks'
 
-import { HIDE_RECIPIENTS_COPY } from './ui'
+import { BlockChecklist } from './block-checklist'
+import { Card, HIDE_RECIPIENTS_COPY } from './ui'
 import type { RenderedEmail } from '@/lib/render/email'
 
 interface Props {
@@ -25,12 +26,6 @@ interface Props {
   /** Set when the setting failed to save, so the box has been put back. */
   hideRecipientsError: string | null
 }
-
-const LABELS: { key: keyof BlockSelection; label: string }[] = [
-  { key: 'gwResults', label: 'Gameweek results' },
-  { key: 'overallStandings', label: 'Season standings' },
-  { key: 'prizeStructure', label: 'Prize structure' },
-]
 
 /**
  * The email tab: what will be sent, and what goes in it.
@@ -81,76 +76,55 @@ export function EmailPanel({
        * once and hiding next week un-publishes nothing.
        */}
       {canSend && (
-        <div className="flex flex-col gap-2 rounded-lg border border-line p-3">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={hideRecipients}
-              onChange={(e) => onHideRecipientsChange(e.target.checked)}
-              className="mt-0.5 size-4 accent-accent"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
-              <span className="text-xs leading-relaxed text-muted">
-                {hideRecipients ? HIDE_RECIPIENTS_COPY.on : HIDE_RECIPIENTS_COPY.off}
+        <Card
+          title="Recipients"
+          aside={`${recipientCount} ${recipientCount === 1 ? 'address' : 'addresses'}`}
+        >
+          <div className="flex flex-col gap-2">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={hideRecipients}
+                onChange={(e) => onHideRecipientsChange(e.target.checked)}
+                className="mt-0.5 size-4 accent-accent"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Hide recipients&apos; addresses</span>
+                <span className="text-xs leading-relaxed text-muted">
+                  {hideRecipients ? HIDE_RECIPIENTS_COPY.on : HIDE_RECIPIENTS_COPY.off}
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
 
-          {hideRecipientsError && (
-            <p role="alert" className="text-xs leading-relaxed text-danger">
-              {hideRecipientsError}
-            </p>
-          )}
-        </div>
+            {hideRecipientsError && (
+              <p role="alert" className="text-xs leading-relaxed text-danger">
+                {hideRecipientsError}
+              </p>
+            )}
+          </div>
+        </Card>
       )}
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium">Include</legend>
+      <Card title="Include">
+        <BlockChecklist
+          blocks={blocks}
+          onChange={(key, checked) => onBlocksChange({ ...blocks, [key]: checked })}
+          statsReady={statsReady}
+        />
+      </Card>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-2">
-          {LABELS.map(({ key, label }) => {
-            // Same rule as the WhatsApp tab: only the blocks built from scores wait.
-            const withheld = !statsReady && dependsOnGameweek(key)
-            return (
-              <label
-                key={key}
-                className={`flex items-center gap-2 text-sm ${
-                  withheld ? 'opacity-50' : 'cursor-pointer'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  disabled={withheld}
-                  checked={!withheld && blocks[key]}
-                  onChange={(e) => onBlocksChange({ ...blocks, [key]: e.target.checked })}
-                  className="size-4 accent-accent"
-                />
-                {label}
-              </label>
-            )
-          })}
-        </div>
-
-        {!statsReady && (
-          <p className="rounded-lg bg-warning-surface p-3 text-xs leading-relaxed text-warning">
-            Gameweek in progress. Results and standings will be available when we have the
-            current gameweek&apos;s final results.
-          </p>
-        )}
-      </fieldset>
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-medium">Message preview</span>
+      <Card
+        title="Preview"
+        aside={
           <button
             type="button"
             onClick={() => setShowHtml(!showHtml)}
-            className="shrink-0 text-xs underline"
+            className="text-xs underline"
           >
             {showHtml ? 'Show plain text' : 'Show HTML'}
           </button>
-        </div>
+        }
+      >
 
         {/* The subject sits inside the frame, above a rule, because that is where it sits
             in the thing being previewed — a mail client shows it attached to the message,
@@ -177,7 +151,7 @@ export function EmailPanel({
             </pre>
           )}
         </div>
-      </div>
+      </Card>
 
       {sentAt && (
         <p className="text-sm text-muted">Emailed on {new Date(sentAt).toLocaleString()}.</p>

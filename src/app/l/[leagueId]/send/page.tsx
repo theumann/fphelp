@@ -58,7 +58,7 @@ export default async function SendPage({
     const blocked = err instanceof FplBlockedError
     return (
       <main className="mx-auto max-w-xl p-6">
-        <h1 className="text-lg font-semibold">Couldn&apos;t reach the FPL API</h1>
+        <h1 className="heading text-2xl">Couldn&apos;t reach the FPL API</h1>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
           {blocked
             ? 'The API appears to be blocking this host. This is the Cloudflare datacenter-IP risk - see ARCHITECTURE.md; the fix is an egress proxy, not a redeploy.'

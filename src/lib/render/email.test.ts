@@ -53,6 +53,21 @@ function render(over: Partial<RenderEmailInput> = {}) {
 }
 
 describe('renderEmail', () => {
+  it('colours the riser and faller the way it colours the standings', () => {
+    const { html, text } = render({
+      stats: stats({
+        biggestRiser: { entry: 1, playerName: 'Dana', entryName: 'Team 1', places: 4 },
+        biggestFaller: { entry: 2, playerName: 'Sam', entryName: 'Team 2', places: -3 },
+      }),
+    })
+
+    expect(html).toContain('Riser: Dana <span style="color:#15803d">▲4</span>')
+    expect(html).toContain('Faller: Sam <span style="color:#b91c1c">▼3</span>')
+    // The plaintext alternative has them too, with bare arrows: there is no colour there.
+    expect(text).toContain('Riser: Dana ▲4')
+    expect(text).toContain('Faller: Sam ▼3')
+  })
+
   it('subjects the email with the league and gameweek', () => {
     expect(render().subject).toBe('The Sunday League - Gameweek 3')
   })
