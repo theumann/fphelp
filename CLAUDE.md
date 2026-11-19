@@ -60,6 +60,7 @@ The cron's Sentry check-in **upserts its own schedule** (`monitorConfig` in `scr
 - One template renders both the HTML email and the plaintext WhatsApp payload.
 
 - **Setup's three tabs are split by save model, not by topic.** Pot & prizes batches behind Save; Communication and People write on every click. Adding a section means deciding which of those it is, and putting it in the matching panel. The panels are **kept mounted and hidden** rather than unmounted, so a switch cannot discard the money form's unsaved edits — `?tab=` is kept in step with `replaceState` for the same reason, since a real navigation would remount. Any e2e test touching a non-default panel has to open its tab first.
+- **Dues has two tabs on the same `PanelTabs`: Dues (money in) and Winnings (money out).** Kept mounted for the same reason as Setup's — the checklist holds optimistic ticks — and `?tab=winnings` links straight to the ledger. The checklist leads because it is the panel with anything to do; the ledger is read, never edited.
 
 - **"Manager" means an FPL entry** competing in the league (`managers` table). A person who logs in here is an **owner** (`users` + `league_users`). Don't conflate them.
 

@@ -1,5 +1,7 @@
 import { DuesList } from '@/components/dues-list'
 import { NotAnOwner } from '@/components/not-an-owner'
+import { PanelTabs } from '@/components/panel-tabs'
+import { Page, PageHeader } from '@/components/ui'
 import { WinningsLedger, type ManagerName } from '@/components/winnings-ledger'
 import {
   getSettings,
@@ -20,10 +22,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function DuesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ leagueId: string }>
+  searchParams: Promise<{ tab?: string }>
 }) {
-  const { leagueId } = await params
+  const [{ leagueId }, { tab }] = await Promise.all([params, searchParams])
 
   // Membership is checked before the FPL call, not after: a non-member should not be
   // able to make this deployment fetch on their behalf.
@@ -75,28 +79,54 @@ export default async function DuesPage({
 
   return (
     <main>
-      <DuesList
-        leagueId={league.id}
-        leagueName={standings.league.name}
-        managers={roster.map((m) => ({
-          entry: m.entry,
-          entryName: m.entryName,
-          playerName: m.playerName,
-          pending: m.pending,
-        }))}
-        initialPaid={Object.fromEntries(paid)}
-        entryFeeCents={settings.entryFee !== undefined ? toCents(settings.entryFee) : null}
-        potCents={settings.potTotal !== undefined ? toCents(settings.potTotal) : null}
-        currency={settings.currency}
-        winnings={
-          <WinningsLedger
-            ledger={ledger}
-            names={names}
-            currency={settings.currency}
-            gameweekCount={gameweeks}
-          />
-        }
-      />
+      <Page>
+        <PageHeader title="Dues" subtitle={standings.league.name} />
+
+        {/*
+          Split by direction of money: what has come in, and what is owed out. Dues leads
+          because it is the one with anything to do — the ledger is read, never edited.
+          `?tab=winnings` links straight to the ledger.
+        */}
+        <PanelTabs
+          label="Money in and out"
+          initial={tab}
+          tabs={[
+            {
+              id: 'dues',
+              label: 'Dues',
+              panel: (
+                <DuesList
+                  leagueId={league.id}
+                  managers={roster.map((m) => ({
+                    entry: m.entry,
+                    entryName: m.entryName,
+                    playerName: m.playerName,
+                    pending: m.pending,
+                  }))}
+                  initialPaid={Object.fromEntries(paid)}
+                  entryFeeCents={
+                    settings.entryFee !== undefined ? toCents(settings.entryFee) : null
+                  }
+                  potCents={settings.potTotal !== undefined ? toCents(settings.potTotal) : null}
+                  currency={settings.currency}
+                />
+              ),
+            },
+            {
+              id: 'winnings',
+              label: 'Winnings',
+              panel: (
+                <WinningsLedger
+                  ledger={ledger}
+                  names={names}
+                  currency={settings.currency}
+                  gameweekCount={gameweeks}
+                />
+              ),
+            },
+          ]}
+        />
+      </Page>
     </main>
   )
 }

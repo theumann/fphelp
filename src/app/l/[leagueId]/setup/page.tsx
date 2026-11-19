@@ -3,7 +3,7 @@ import { NotAnOwner } from '@/components/not-an-owner'
 import { OwnersList } from '@/components/owners-list'
 import { RecipientsList } from '@/components/recipients-list'
 import { SetupForm } from '@/components/setup-form'
-import { SetupTabs } from '@/components/setup-tabs'
+import { PanelTabs } from '@/components/panel-tabs'
 import { Page, PageHeader } from '@/components/ui'
 import { YourTeam } from '@/components/your-team'
 import {
@@ -68,7 +68,8 @@ export default async function SetupPage({
           "Your team" sits with people because it is the one setting here that belongs to
           the signed-in owner rather than to the league — co-owners each set their own.
         */}
-        <SetupTabs
+        <PanelTabs
+          label="Setup sections"
           initial={tab}
           tabs={[
             {
