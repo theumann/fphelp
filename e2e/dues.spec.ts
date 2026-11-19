@@ -29,6 +29,9 @@ test('pays a tied gameweek split, and holds back one still being captured', asyn
   ])
 
   await ownerPage.goto(leagueUrl('/dues'))
+  // Dues opens on the checklist; the ledger is the second panel.
+  await ownerPage.getByRole('tab', { name: 'Winnings' }).click()
+  await expect(ownerPage).toHaveURL(/[?&]tab=winnings/)
 
   const managers = ownerPage.getByRole('list', { name: 'Winnings by manager' })
   const salah = managers.getByRole('listitem').filter({ hasText: 'Salah Bin Dover' })
@@ -51,9 +54,29 @@ test('pays a tied gameweek split, and holds back one still being captured', asyn
 })
 
 test('says so when no gameweek has been captured', async ({ ownerPage }) => {
-  await ownerPage.goto(leagueUrl('/dues'))
+  // Deep-linked, the way a shared `?tab=winnings` URL arrives.
+  await ownerPage.goto(leagueUrl('/dues?tab=winnings'))
 
   // The fixture has two settled gameweeks and nothing stored for either. That is a gap
   // in the ledger, and it must read as one rather than as nobody having won.
   await expect(ownerPage.getByText(/No scores were captured for GW1, GW2/)).toBeVisible()
+})
+
+test('a tick survives a switch to Winnings and back', async ({ ownerPage }) => {
+  await ownerPage.goto(leagueUrl('/dues'))
+
+  const salah = ownerPage.getByRole('checkbox', { name: /Salah Bin Dover/ })
+  await salah.check()
+  await expect(ownerPage.getByText('1 of 18 paid')).toBeVisible()
+  // Disabled while the Server Action is in flight; enabled again means it answered.
+  await expect(salah).toBeEnabled()
+
+  // Panels stay mounted, so switching away must not reset the list to its initial state.
+  await ownerPage.getByRole('tab', { name: 'Winnings' }).click()
+  await ownerPage.getByRole('tab', { name: 'Dues' }).click()
+  await expect(salah).toBeChecked()
+
+  // And it was saved, not just held in the component: a reload reads it back.
+  await ownerPage.reload()
+  await expect(ownerPage.getByRole('checkbox', { name: /Salah Bin Dover/ })).toBeChecked()
 })

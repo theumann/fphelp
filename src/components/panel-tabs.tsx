@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react'
 
 import { TabStrip } from './ui'
 
-export interface SetupTab {
+export interface PanelTab {
   /** Also the `?tab=` value, so a link can open the page on this panel. */
   id: string
   label: string
@@ -12,25 +12,33 @@ export interface SetupTab {
 }
 
 /**
- * Setup's three panels.
+ * A page split into panels — Setup's three, and Dues' two.
  *
- * The page had grown to five stacked sections and a phone's worth of scrolling between
- * the pot and the recipient list. The split follows how the settings actually behave
- * rather than what they are about: the money panel is the one place with a Save button,
- * and everything in the other two writes on click. One save model per panel is what stops
- * the sticky bar from looking like it governs sections that ignore it.
+ * Setup had grown to five stacked sections and a phone's worth of scrolling between the
+ * pot and the recipient list; Dues put the winnings ledger under an eighteen-row
+ * checklist. Setup splits by how its settings save (the money panel is the one place
+ * with a Save button), Dues by direction of money — in, and out.
  *
- * **Every panel stays mounted**, hidden with `hidden` rather than unmounted. The money
- * form holds unsaved edits in component state, so unmounting it — which is what a
- * server-rendered `?tab=` link or a route change would do — would silently discard a
- * half-typed pot on a tab switch. Hiding costs a little markup and makes losing work
- * impossible.
+ * **Every panel stays mounted**, hidden with `hidden` rather than unmounted. Setup's money
+ * form holds unsaved edits in component state, and the dues list holds optimistic ticks;
+ * unmounting either — which is what a server-rendered `?tab=` link or a route change
+ * would do — would silently discard them on a tab switch. Hiding costs a little markup
+ * and makes losing work impossible.
  *
  * The URL is kept in step with `replaceState`, which updates the address bar without
  * asking Next to navigate. So `/setup?tab=people` opens on that panel and a switch is
  * linkable, without a round trip that would take the draft with it.
  */
-export function SetupTabs({ tabs, initial }: { tabs: SetupTab[]; initial?: string }) {
+export function PanelTabs({
+  tabs,
+  initial,
+  label,
+}: {
+  tabs: PanelTab[]
+  initial?: string
+  /** Names the strip for screen readers: "Setup sections", "Money in and out". */
+  label: string
+}) {
   const [active, setActive] = useState(
     () => tabs.find((t) => t.id === initial)?.id ?? tabs[0].id,
   )
@@ -48,7 +56,7 @@ export function SetupTabs({ tabs, initial }: { tabs: SetupTab[]; initial?: strin
         tabs={tabs.map(({ id, label }) => ({ id, label }))}
         active={active}
         onSelect={select}
-        label="Setup sections"
+        label={label}
       />
 
       {tabs.map((tab) => {
