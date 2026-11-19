@@ -10,7 +10,7 @@ export function NotAnOwner() {
   return (
     <main className="mx-auto max-w-xl p-6">
       <div className="rounded-xl border border-line bg-surface p-5">
-        <h1 className="text-lg font-semibold tracking-tight">
+        <h1 className="heading text-2xl">
           You don&apos;t have access to this league
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">

@@ -39,4 +39,10 @@ test('send page', async ({ page, db }) => {
   await page.screenshot({ path: 'screenshots/send-iphone-email.png' })
   await page.getByRole('tab', { name: 'WhatsApp' }).click()
   await page.screenshot({ path: 'screenshots/send-iphone-whatsapp.png' })
+
+  // The whole page as well, in both themes, because the preview bubble sits below the
+  // fold. The fixed send bar lands mid-image in a full-page shot; that is expected.
+  await page.screenshot({ path: 'screenshots/send-iphone-whatsapp-full.png', fullPage: true })
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.screenshot({ path: 'screenshots/send-iphone-whatsapp-full-dark.png', fullPage: true })
 })

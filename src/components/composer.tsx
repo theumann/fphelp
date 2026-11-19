@@ -11,20 +11,17 @@ import {
 // A league setting, so it lives with the other Setup actions — imported rather than
 // duplicated, which is what keeps the two places one value instead of two.
 import { setHideRecipientsAction } from '@/app/setup/actions'
+import { BlockChecklist } from '@/components/block-checklist'
 import { EmailPanel } from '@/components/email-panel'
+import { WhatsAppPreview } from '@/components/whatsapp-preview'
 import type { DigestStats } from '@/lib/digest/stats'
-import {
-  dependsOnGameweek,
-  effectiveBlocks,
-  type BlockSelection,
-  type PrizeSummary,
-} from '@/lib/render/blocks'
+import { effectiveBlocks, type BlockSelection, type PrizeSummary } from '@/lib/render/blocks'
 import { DEFAULT_BUDGET } from '@/lib/render/budget'
 import { composeMessage } from '@/lib/render/compose'
 import { renderEmail } from '@/lib/render/email'
 import { buildWhatsAppLinks } from '@/lib/render/whatsapp'
 
-import { TabStrip } from './ui'
+import { Card, inputClass, TabStrip } from './ui'
 
 interface Props {
   /**
@@ -56,12 +53,6 @@ interface Props {
     sentAt?: string
   }
 }
-
-const BLOCK_LABELS: { key: keyof BlockSelection; label: string; hint: string }[] = [
-  { key: 'gwResults', label: 'Gameweek results', hint: 'Winner, average, riser and faller' },
-  { key: 'overallStandings', label: 'Season standings', hint: 'Full table with movement' },
-  { key: 'prizeStructure', label: 'Prize structure', hint: 'Pot and prize breakdown' },
-]
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 type Channel = 'email' | 'whatsapp'
@@ -320,7 +311,7 @@ export function Composer({
     // otherwise the last control scrolls to a position it can never be tapped in.
     <div className="mx-auto flex w-full max-w-xl flex-col gap-5 p-4 pb-[calc(9rem+env(safe-area-inset-bottom))]">
       <header>
-        <h1 className="text-xl font-semibold">{leagueName}</h1>
+        <h1 className="heading text-[1.75rem]">{leagueName}</h1>
         <p className="text-sm text-muted">
           Gameweek {stats.gameweek} · {stats.standings.length} managers
           {stats.pendingCount > 0 && ` · ${stats.pendingCount} not yet scored`}
@@ -329,27 +320,32 @@ export function Composer({
 
       {/* Above the tabs because it is shared: one message, two renderings. Moving it
           inside a tab would suggest each channel has its own prose, which it does not. */}
-      <label className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Your message</span>
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={5}
-          placeholder="Write this week's update…"
-          className="w-full resize-y rounded-lg border border-line-strong bg-surface p-3 text-base text-foreground outline-none placeholder:text-faint focus:border-ring"
-        />
-        {persistence && (
-          <span className="text-xs text-muted">
-            {saveState === 'saving' && 'Saving…'}
-            {saveState === 'saved' && 'Draft saved - your co-owner sees this too.'}
-            {saveState === 'error' && (
-              <span className="text-danger">Couldn&apos;t save the draft.</span>
-            )}
-            {saveState === 'idle' &&
-              'Shared draft - the same text feeds both email and WhatsApp. You can send either or both.'}
-          </span>
-        )}
-      </label>
+      <Card title="Your message">
+        <div className="flex flex-col gap-2">
+          <textarea
+            aria-label="Your message"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={5}
+            placeholder="Write this week's update…"
+            // The shared field style, so it focuses like every other input: one ring. It
+            // used to carry `outline-none` plus a ring-coloured border, but the global
+            // `:focus-visible` rule is unlayered and beats the utility, so it drew both.
+            className={`${inputClass} resize-y`}
+          />
+          {persistence && (
+            <span className="text-xs text-muted">
+              {saveState === 'saving' && 'Saving…'}
+              {saveState === 'saved' && 'Draft saved - your co-owner sees this too.'}
+              {saveState === 'error' && (
+                <span className="text-danger">Couldn&apos;t save the draft.</span>
+              )}
+              {saveState === 'idle' &&
+                'Shared draft - the same text feeds both email and WhatsApp. You can send either or both.'}
+            </span>
+          )}
+        </div>
+      </Card>
 
       {emailEnabled && (
         // The same strip Setup uses. These are the app's only two tabbed surfaces, and
@@ -383,65 +379,13 @@ export function Composer({
           aria-labelledby={emailEnabled ? 'tab-whatsapp' : undefined}
           className="flex flex-col gap-5"
         >
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium">Include</legend>
-
-            {BLOCK_LABELS.map(({ key, label, hint }) => {
-              // Only the two built from scores. The prize figures come from the league's
-              // settings and do not move because a match is being played.
-              const withheld = !statsReady && dependsOnGameweek(key)
-              return (
-                <label
-                  key={key}
-                  className={`flex items-start gap-3 rounded-lg border border-line p-3 ${
-                    withheld ? 'opacity-50' : 'cursor-pointer'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    disabled={withheld}
-                    checked={!withheld && blocks[key]}
-                    onChange={(e) => setBlocks({ ...blocks, [key]: e.target.checked })}
-                    className="mt-1 size-4 accent-accent"
-                  />
-                  <span className="flex flex-col">
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-xs text-muted">{hint}</span>
-                  </span>
-                </label>
-              )
-            })}
-
-            {/* Under the controls it explains, rather than above them: by the time it is
-                read, the greyed-out rows it refers to have already been seen. */}
-            {!statsReady && (
-              <p className="rounded-lg bg-warning-surface p-3 text-xs leading-relaxed text-warning">
-Gameweek in progress. Results and standings will be available when we have the
-              current gameweek&apos;s final results.
-            </p>
-            )}
-          </fieldset>
-
-          <div className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between text-sm">
-              <span className="font-medium">Length</span>
-              <span className={overBudget ? 'font-medium text-danger' : 'text-muted'}>
-                {used} / {DEFAULT_BUDGET}
-                {overBudget ? ` · ${Math.abs(remaining)} over` : ` · ${remaining} left`}
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
-              <div
-                className={`h-full transition-all ${overBudget ? 'bg-danger' : 'bg-[#25D366]'}`}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            {composed.truncatedRows > 0 && (
-              <p className="text-xs text-warning">
-                Standings trimmed by {composed.truncatedRows} rows to fit.
-              </p>
-            )}
-          </div>
+          <Card title="Include">
+            <BlockChecklist
+              blocks={blocks}
+              onChange={(key, checked) => setBlocks({ ...blocks, [key]: checked })}
+              statsReady={statsReady}
+            />
+          </Card>
 
           {sentAt ? (
             <div className="flex flex-col gap-2 rounded-lg bg-warning-surface p-3 text-sm text-warning">
@@ -461,7 +405,7 @@ Gameweek in progress. Results and standings will be available when we have the
           ) : (
             persistence &&
             tappedSend && (
-              <div className="flex flex-col gap-2 rounded-lg border border-line-strong p-3">
+              <div className="flex flex-col gap-2 rounded-xl border border-line-strong bg-surface p-4">
                 <p className="text-sm">
                   Did the message actually go out? We can&apos;t tell - WhatsApp
                   doesn&apos;t report back.
@@ -482,12 +426,34 @@ Gameweek in progress. Results and standings will be available when we have the
             )
           )}
 
-          <section className="flex flex-col gap-2">
-            <span className="text-sm font-medium">WhatsApp preview</span>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-muted p-3 text-sm">
-              {composed.text || 'Nothing to send yet.'}
-            </pre>
-          </section>
+          {/* The length lives with the preview because it is the length of what the
+              preview shows. Ticking blocks rarely moves it past the limit, since the
+              standings are trimmed to fit; a long message does, and the tab's dot covers
+              that from the email side. */}
+          <Card
+            title="Preview"
+            aside={
+              <span className={overBudget ? 'font-medium text-danger' : undefined}>
+                {used} / {DEFAULT_BUDGET}
+                {overBudget ? ` · ${Math.abs(remaining)} over` : ` · ${remaining} left`}
+              </span>
+            }
+          >
+            <div className="flex flex-col gap-1">
+              <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  className={`h-full transition-all ${overBudget ? 'bg-danger' : 'bg-[#25D366]'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {composed.truncatedRows > 0 && (
+                <p className="text-xs text-warning">
+                  Standings trimmed by {composed.truncatedRows} rows to fit.
+                </p>
+              )}
+            </div>
+            <WhatsAppPreview text={composed.text} />
+          </Card>
         </div>
       ) : (
         <EmailPanel

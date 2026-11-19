@@ -42,16 +42,19 @@ export function composeMessage(input: ComposeInput): ComposedMessage {
   const lead: string[] = []
   if (input.body.trim()) lead.push(input.body.trim())
   if (input.blocks.gwResults) lead.push(renderGwResults(input.stats))
-  if (input.blocks.prizeStructure && input.prize) {
-    lead.push(renderPrizeStructure(input.prize))
-  }
+
+  // After the standings, in the order the email and the composer's checklist use. It
+  // was in `lead` once, which put it above the table in WhatsApp only — an accident of
+  // standings being the trimmed block, since trimming does not depend on position.
+  const prizes =
+    input.blocks.prizeStructure && input.prize ? renderPrizeStructure(input.prize) : ''
 
   // Rendered as-is: the signature already reads "Name — Team Manager and League Admin",
   // so prefixing another dash produces "— Name — Team…".
   const signature = input.signature?.trim() ?? ''
 
   const build = (standings: string) =>
-    [...lead, standings, signature].filter(Boolean).join('\n\n')
+    [...lead, standings, prizes, signature].filter(Boolean).join('\n\n')
 
   if (!input.blocks.overallStandings) {
     const text = build('')

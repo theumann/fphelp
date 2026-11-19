@@ -48,7 +48,7 @@ export function Nav({ who, prefix = null }: { who?: string | null; prefix?: stri
   const pathname = usePathname()
 
   return (
-    <nav className="border-b border-line bg-surface">
+    <nav className="relative border-b border-line bg-surface">
       {/**
        * The mark is centred in the space *between* the two groups, not against the bar.
        *
@@ -112,6 +112,12 @@ export function Nav({ who, prefix = null }: { who?: string | null; prefix?: stri
           ) : null}
         </div>
       </div>
+      {/* The logo's own gradient, repeated once as a strip over the bottom border, so the
+          mark is not the only colour on screen. Same in both themes, like the logo. */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 -bottom-px h-[3px] bg-linear-to-r from-[#0399ec] via-[#2762e1] to-[#991ce1]"
+      />
     </nav>
   )
 }

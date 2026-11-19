@@ -22,8 +22,13 @@
   --muted: #71717a;
   --faint: #a1a1aa;
 
-  /* Primary action. Inverted against the page rather than a brand colour. */
-  --accent: #18181b;
+  /*
+   * Primary action: the logo's middle blue. Each theme has its own value, because the
+   * logo blue is too dark to read on the dark background — there it is lightened and the
+   * button text flips to dark. A league colour (club colours, later) would be another
+   * pair set over these two on the league layout.
+   */
+  --accent: #2762e1;
   --accent-foreground: #ffffff;
 
   --danger: #b91c1c;
@@ -33,7 +38,11 @@
   --warning: #92400e;
   --warning-surface: #fffbeb;
 
-  --ring: #71717a;
+  --ring: #2762e1;
+
+  /* The WhatsApp preview's sent bubble: WhatsApp's own outgoing colours, per theme. */
+  --chat-bubble: #d9fdd3;
+  --chat-bubble-foreground: #111b21;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,8 +59,8 @@
     --muted: #a1a1aa;
     --faint: #71717a;
 
-    --accent: #fafafa;
-    --accent-foreground: #18181b;
+    --accent: #7aa2f7;
+    --accent-foreground: #0b1020;
 
     --danger: #fca5a5;
     --danger-surface: #2a1416;
@@ -60,7 +69,10 @@
     --warning: #fcd34d;
     --warning-surface: #2a1f0a;
 
-    --ring: #a1a1aa;
+    --ring: #7aa2f7;
+
+    --chat-bubble: #005c4b;
+    --chat-bubble-foreground: #e9edef;
   }
 }
 
@@ -82,9 +94,29 @@
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
   --color-ring: var(--ring);
+  --color-chat-bubble: var(--chat-bubble);
+  --color-chat-bubble-foreground: var(--chat-bubble-foreground);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-barlow-condensed);
+  /* The phone's own UI font, for the WhatsApp preview — which is what members read it in. */
+  --font-system: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/**
+ * Page and card headings: Barlow Condensed, bold and uppercase, for a scoreboard feel.
+ *
+ * Headings only. Body text, forms and figures stay in Geist, which reads better at small
+ * sizes and has the tabular digits the money columns rely on. Size is left to each use.
+ */
+@utility heading {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-wrap: balance;
 }
 
 body {

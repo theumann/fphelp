@@ -39,7 +39,7 @@ export function Page({ children, className = '' }: { children: ReactNode; classN
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: ReactNode }) {
   return (
     <header className="flex flex-col gap-1">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="heading text-[2rem]">{title}</h1>
       {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
     </header>
   )
@@ -63,7 +63,7 @@ export function Card({ title, hint, aside, children, className = '' }: CardProps
       {title && (
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+            <h2 className="heading text-[1.1875rem]">{title}</h2>
             {hint && <p className="text-sm text-muted">{hint}</p>}
           </div>
           {aside && <div className="shrink-0 text-sm text-muted">{aside}</div>}

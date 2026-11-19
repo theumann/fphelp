@@ -89,12 +89,20 @@ function renderBody(body: string): string {
     .join('')
 }
 
-function movement(row: StandingRow): string {
-  if (row.movement === null || row.movement === 0) return ''
-  const up = row.movement > 0
+/**
+ * A coloured arrow and count: green up, red down. Used by the standings and by the
+ * gameweek block's riser and faller, which used to print theirs uncoloured.
+ */
+function movementMark(places: number): string {
+  if (places === 0) return ''
+  const up = places > 0
   // Colour alone must not carry the meaning — the arrow says it too, which matters for
   // the plaintext alternative and for anyone who can't distinguish the two greens.
-  return `<span style="color:${up ? '#15803d' : '#b91c1c'}">${up ? '▲' : '▼'}${Math.abs(row.movement)}</span>`
+  return `<span style="color:${up ? '#15803d' : '#b91c1c'}">${up ? '▲' : '▼'}${Math.abs(places)}</span>`
+}
+
+function movement(row: StandingRow): string {
+  return row.movement === null ? '' : movementMark(row.movement)
 }
 
 /**
@@ -152,11 +160,13 @@ function renderGwResultsHtml(stats: DigestStats): string {
       lines.push(`League average: ${Math.round(stats.leagueAverage)}`)
     }
     if (stats.biggestRiser) {
-      lines.push(`Riser: ${esc(stats.biggestRiser.playerName)} ▲${stats.biggestRiser.places}`)
+      lines.push(
+        `Riser: ${esc(stats.biggestRiser.playerName)} ${movementMark(Math.abs(stats.biggestRiser.places))}`,
+      )
     }
     if (stats.biggestFaller) {
       lines.push(
-        `Faller: ${esc(stats.biggestFaller.playerName)} ▼${Math.abs(stats.biggestFaller.places)}`,
+        `Faller: ${esc(stats.biggestFaller.playerName)} ${movementMark(-Math.abs(stats.biggestFaller.places))}`,
       )
     }
   }
@@ -224,6 +234,14 @@ function renderText(input: RenderEmailInput): string {
       lines.push(`${input.stats.gwWinners.length > 1 ? 'Winners (tied)' : 'Winner'}: ${names}`)
       if (input.stats.leagueAverage !== null) {
         lines.push(`League average: ${Math.round(input.stats.leagueAverage)}`)
+      }
+      // These two were missing here while the HTML printed them, so a member reading the
+      // plain version never learned who rose or fell. Bare arrows: there is no colour.
+      if (input.stats.biggestRiser) {
+        lines.push(`Riser: ${input.stats.biggestRiser.playerName} ▲${Math.abs(input.stats.biggestRiser.places)}`)
+      }
+      if (input.stats.biggestFaller) {
+        lines.push(`Faller: ${input.stats.biggestFaller.playerName} ▼${Math.abs(input.stats.biggestFaller.places)}`)
       }
     }
     parts.push(lines.join('\n'))
